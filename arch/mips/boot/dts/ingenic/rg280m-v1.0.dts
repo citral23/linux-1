@@ -1,0 +1,108 @@
+// SPDX-License-Identifier: GPL-2.0
+/dts-v1/;
+
+#include "rg280m-v1.1.dts"
+
+#include <dt-bindings/interrupt-controller/irq.h>
+
+/ {
+	compatible = "ylm,rg280m-v1.0", "ingenic,jz4770";
+	model = "Anbernic RG-280M v1.0";
+
+	hdmi_power: regulator-3 {
+		compatible = "regulator-fixed";
+		regulator-name = "hdmi_pwr";
+		gpio = <&gpf 22 0>;
+		enable-active-high;
+
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		vin-supply = <&vcc>;
+	};
+
+	hdmi-connector {
+		compatible = "hdmi-connector";
+		label = "hdmi";
+
+		type = "c";
+
+		port {
+			hdmi_connector_in: endpoint {
+				remote-endpoint = <&hdmi_connector_out>;
+			};
+		};
+	};
+};
+
+&pinctrl {
+	pins_it66121: it66121 {
+		pins = "PF12";
+		bias-pull-up;
+	};
+
+	pins_i2c0: i2c0 {
+		function = "i2c0";
+		groups = "i2c0-data";
+	};
+};
+
+&i2c0 {
+	status = "okay";
+
+	pinctrl-names = "default";
+	pinctrl-0 = <&pins_i2c0>;
+
+	clock-frequency = <100000>; /* 100 kHz */
+
+	hdmi@4c {
+		compatible = "ite,it66121";
+		reg = <0x4c>;
+
+		interrupt-parent = <&gpf>;
+		interrupts = <12 IRQ_TYPE_EDGE_FALLING>;
+		interrupt-names = "irq";
+
+		reset-gpios = <&gpe 6 GPIO_ACTIVE_LOW>;
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&pins_it66121>;
+
+		vrf12-supply = <&hdmi_power>;
+		vcn33-supply = <&hdmi_power>;
+		vcn18-supply = <&hdmi_power>;
+
+		ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			port@0 {
+				reg = <0>;
+
+				hdmi_input: endpoint {
+					bus-width = <24>;
+					remote-endpoint = <&hdmi_output>;
+				};
+			};
+
+			port@1 {
+				reg = <1>;
+
+				hdmi_connector_out: endpoint {
+					remote-endpoint = <&hdmi_connector_in>;
+				};
+			};
+		};
+	};
+};
+
+&lcd_port0 {
+	hdmi_output: endpoint@1 {
+		reg = <1>;
+		remote-endpoint = <&hdmi_input>;
+	};
+};
+
+&pins_lcd {
+	/* The LCD's interface is 8 bits, but we need the 24-bit interface for HDMI */
+	groups = "lcd-24bit";
+};

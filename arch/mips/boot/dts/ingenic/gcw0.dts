@@ -2,51 +2,11 @@
 /dts-v1/;
 
 #include "jz4770.dtsi"
-#include <dt-bindings/clock/ingenic,tcu.h>
-
-#include <dt-bindings/gpio/gpio.h>
-#include <dt-bindings/iio/adc/ingenic,adc.h>
-#include <dt-bindings/input/input.h>
+#include "bits/gcw0-base.dtsi"
 
 / {
 	compatible = "gcw,zero", "ingenic,jz4770";
 	model = "GCW Zero";
-
-	aliases {
-		serial0 = &uart0;
-		serial1 = &uart1;
-		serial2 = &uart2;
-		serial3 = &uart3;
-	};
-
-	memory: memory {
-		device_type = "memory";
-		reg = <0x0 0x10000000>,
-		      <0x30000000 0x10000000>;
-	};
-
-	chosen {
-		stdout-path = "serial2:57600n8";
-	};
-
-	vcc: regulator-0 {
-		compatible = "regulator-fixed";
-		regulator-name = "vcc";
-
-		regulator-min-microvolt = <3300000>;
-		regulator-max-microvolt = <3300000>;
-		regulator-always-on;
-	};
-
-	mmc1_power: regulator-1 {
-		compatible = "regulator-fixed";
-		regulator-name = "mmc1_vcc";
-		gpio = <&gpe 9 0>;
-
-		regulator-min-microvolt = <3300000>;
-		regulator-max-microvolt = <3300000>;
-		vin-supply = <&vcc>;
-	};
 
 	usb_vbus: regulator-2 {
 		compatible = "regulator-fixed";
@@ -59,64 +19,6 @@
 		vin-supply = <&vcc>;
 	};
 
-	headphones_amp: analog-amplifier-0 {
-		compatible = "simple-audio-amplifier";
-		enable-gpios = <&gpf 3 GPIO_ACTIVE_LOW>;
-		enable-delay-ms = <50>;
-
-		VCC-supply = <&ldo5>;
-		sound-name-prefix = "Headphones Amp";
-	};
-
-	speaker_amp: analog-amplifier-1 {
-		compatible = "simple-audio-amplifier";
-		enable-gpios = <&gpf 20 GPIO_ACTIVE_HIGH>;
-
-		VCC-supply = <&ldo5>;
-		sound-name-prefix = "Speaker Amp";
-	};
-
-	sound {
-		compatible = "simple-audio-card";
-
-		simple-audio-card,name = "gcw0-audio";
-		simple-audio-card,format = "i2s";
-
-		simple-audio-card,widgets =
-			"Speaker", "Speaker",
-			"Headphone", "Headphones",
-			"Microphone", "Built-in Mic";
-		simple-audio-card,routing =
-			"Headphones Amp INL", "LHPOUT",
-			"Headphones Amp INR", "RHPOUT",
-			"Headphones", "Headphones Amp OUTL",
-			"Headphones", "Headphones Amp OUTR",
-			"Speaker Amp INL", "LOUT",
-			"Speaker Amp INR", "ROUT",
-			"Speaker", "Speaker Amp OUTL",
-			"Speaker", "Speaker Amp OUTR",
-			"LLINEIN", "Cap-less",
-			"RLINEIN", "Cap-less",
-			"Built-in Mic", "MICBIAS",
-			"MIC1P", "Built-in Mic",
-			"MIC1N", "Built-in Mic";
-		simple-audio-card,pin-switches = "Speaker", "Headphones";
-
-		simple-audio-card,hp-det-gpio = <&gpf 21 GPIO_ACTIVE_LOW>;
-		simple-audio-card,aux-devs = <&speaker_amp>, <&headphones_amp>;
-
-		simple-audio-card,bitclock-master = <&dai_codec>;
-		simple-audio-card,frame-master = <&dai_codec>;
-
-		dai_cpu: simple-audio-card,cpu {
-			sound-dai = <&aic>;
-		};
-
-		dai_codec: simple-audio-card,codec {
-			sound-dai = <&codec>;
-		};
-	};
-
 	rumble {
 		compatible = "pwm-vibrator";
 		pwms = <&pwm 4 2000000 0>;
@@ -124,127 +26,6 @@
 
 		pinctrl-names = "default";
 		pinctrl-0 = <&pins_pwm4>;
-	};
-
-	backlight: backlight {
-		compatible = "pwm-backlight";
-		pwms = <&pwm 1 40000 0>;
-		power-supply = <&vcc>;
-
-		brightness-levels = <0 16 32 48 64 80 96 112 128
-				     144 160 176 192 208 224 240 255>;
-		default-brightness-level = <12>;
-
-		pinctrl-names = "default";
-		pinctrl-0 = <&pins_pwm1>;
-	};
-
-	gpio-keys {
-		compatible = "gpio-keys";
-		autorepeat;
-
-		button-0 {
-			label = "D-pad up";
-			linux,code = <KEY_UP>;
-			linux,can-disable;
-			gpios = <&gpe 21 GPIO_ACTIVE_LOW>;
-		};
-
-		button-1 {
-			label = "D-pad down";
-			linux,code = <KEY_DOWN>;
-			linux,can-disable;
-			gpios = <&gpe 25 GPIO_ACTIVE_LOW>;
-		};
-
-		button-2 {
-			label = "D-pad left";
-			linux,code = <KEY_LEFT>;
-			linux,can-disable;
-			gpios = <&gpe 23 GPIO_ACTIVE_LOW>;
-		};
-
-		button-3 {
-			label = "D-pad right";
-			linux,code = <KEY_RIGHT>;
-			linux,can-disable;
-			gpios = <&gpe 24 GPIO_ACTIVE_LOW>;
-		};
-
-		button-4 {
-			label = "Button A";
-			linux,code = <KEY_LEFTCTRL>;
-			linux,can-disable;
-			gpios = <&gpe 29 GPIO_ACTIVE_LOW>;
-		};
-
-		button-5 {
-			label = "Button B";
-			linux,code = <KEY_LEFTALT>;
-			linux,can-disable;
-			gpios = <&gpe 20 GPIO_ACTIVE_LOW>;
-		};
-
-		button-6 {
-			label = "Button Y";
-			linux,code = <KEY_SPACE>;
-			linux,can-disable;
-			gpios = <&gpe 27 GPIO_ACTIVE_LOW>;
-		};
-
-		button-7 {
-			label = "Button X";
-			linux,code = <KEY_LEFTSHIFT>;
-			linux,can-disable;
-			gpios = <&gpe 28 GPIO_ACTIVE_LOW>;
-		};
-
-		button-8 {
-			label = "Left shoulder button";
-			linux,code = <KEY_TAB>;
-			linux,can-disable;
-			gpios = <&gpb 20 GPIO_ACTIVE_LOW>;
-		};
-
-		button-9 {
-			label = "Right shoulder button";
-			linux,code = <KEY_BACKSPACE>;
-			linux,can-disable;
-			gpios = <&gpe 26 GPIO_ACTIVE_LOW>;
-		};
-
-		button-10 {
-			label = "Start button";
-			linux,code = <KEY_ENTER>;
-			linux,can-disable;
-			gpios = <&gpb 21 GPIO_ACTIVE_LOW>;
-		};
-
-		button-11 {
-			label = "Select button";
-			linux,code = <KEY_ESC>;
-			linux,can-disable;
-			/*
-			 * This is the only button that is active high,
-			 * since it doubles as BOOT_SEL1.
-			 */
-			gpios = <&gpd 18 GPIO_ACTIVE_HIGH>;
-		};
-
-		button-12 {
-			label = "Power slider";
-			linux,code = <KEY_POWER>;
-			linux,can-disable;
-			gpios = <&gpa 30 GPIO_ACTIVE_LOW>;
-			wakeup-source;
-		};
-
-		button-13 {
-			label = "Power hold";
-			linux,code = <KEY_PAUSE>;
-			linux,can-disable;
-			gpios = <&gpf 11 GPIO_ACTIVE_LOW>;
-		};
 	};
 
 	i2c3: i2c-controller@3 {
@@ -335,74 +116,43 @@
 		scl-gpios = <&gpd 7 GPIO_ACTIVE_HIGH>;
 		clock-frequency = <100000>;
 
-		/* HDMI (ITE IT6610) chip is on this I2C bus */
-		status = "disabled";
-	};
+		it6610: hdmi@4c {
+			status = "disabled"; /* Disable until the driver works */
 
-	leds {
-		compatible = "gpio-leds";
+			compatible = "ite,it6610";
+			reg = <0x4c>;
 
-		led {
-			label = "power";
-			gpios = <&gpb 30 GPIO_ACTIVE_LOW>;
-			default-state = "on";
-			panic-indicator;
-			retain-state-suspended;
-		};
-	};
+			interrupt-parent = <&gpf>;
+			interrupts = <12 0>;
+			interrupt-names = "irq";
 
-	spi {
-		compatible = "spi-gpio";
-		#address-cells = <1>;
-		#size-cells = <0>;
+			reset-gpios = <&gpe 6 GPIO_ACTIVE_LOW>;
 
-		sck-gpios = <&gpe 15 GPIO_ACTIVE_HIGH>;
-		mosi-gpios = <&gpe 17 GPIO_ACTIVE_HIGH>;
-		cs-gpios = <&gpe 16 GPIO_ACTIVE_HIGH>;
-		num-chipselects = <1>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&pins_it6610>;
 
-		nt39016@0 {
-			compatible = "kingdisplay,kd035g6-54nt";
-			reg = <0>;
+			power-supply = <&ldo7>;
 
-			spi-max-frequency = <3125000>;
-			spi-3wire;
+			ports {
+				#address-cells = <1>;
+				#size-cells = <0>;
 
-			reset-gpios = <&gpe 2 GPIO_ACTIVE_LOW>;
+				port@0 {
+					reg = <0>;
 
-			backlight = <&backlight>;
-			power-supply = <&ldo6>;
-
-			port {
-				panel_input: endpoint {
-					remote-endpoint = <&panel_output>;
+					hdmi_input: endpoint {
+						bus-width = <24>;
+						remote-endpoint = <&hdmi_output>;
+					};
 				};
-			};
-		};
-	};
 
-	usb_conn: connector {
-		compatible = "gpio-usb-b-connector", "usb-b-connector";
-		label = "mini-USB";
-		type = "mini";
+				port@1 {
+					reg = <1>;
 
-		/*
-		 * USB OTG is not yet working reliably, the ID detection
-		 * mechanism tends to fry easily for unknown reasons.
-		 * Until this is fixed, disable OTG by not providing the
-		 * ID GPIO to the driver.
-		 */
-		//id-gpios = <&gpf 18 GPIO_ACTIVE_LOW>;
-
-		vbus-gpios = <&gpb 5 GPIO_ACTIVE_HIGH>;
-		vbus-supply = <&otg_vbus>;
-
-		pinctrl-names = "default";
-		pinctrl-0 = <&pins_otg>;
-
-		port {
-			usb_ep: endpoint {
-				remote-endpoint = <&usb_otg_ep>;
+					hdmi_connector_out: endpoint {
+						remote-endpoint = <&hdmi_connector_in>;
+					};
+				};
 			};
 		};
 	};
@@ -416,96 +166,120 @@
 		pinctrl-0 = <&pins_dc_charger>;
 	};
 
-	battery: battery {
-		compatible = "simple-battery";
-		voltage-min-design-microvolt = <3400000>;
-		voltage-max-design-microvolt = <4200000>;
-	};
+	hdmi-connector {
+		compatible = "hdmi-connector";
+		label = "hdmi";
 
-	vdiv: voltage-divider {
-		compatible = "voltage-divider";
-		#io-channel-cells = <0>;
+		type = "c";
 
-		output-ohms = <332000>;
-		full-ohms = <1332000>;
-
-		io-channels = <&adc INGENIC_ADC_BATTERY>;
-	};
-
-	pmu {
-		compatible = "ingenic,jz4770-battery", "ingenic,jz4740-battery";
-		io-channels = <&vdiv>;
-		io-channel-names = "battery";
-		monitored-battery = <&battery>;
-
-		power-supplies = <&act8600>, <&usb_conn>, <&dc_charger>;
-	};
-
-	joystick {
-		compatible = "adc-joystick";
-		io-channels = <&adc INGENIC_ADC_TOUCH_XP>,
-			      <&adc INGENIC_ADC_TOUCH_YP>;
-		#address-cells = <1>;
-		#size-cells = <0>;
-
-		axis@0 {
-			reg = <0>;
-			linux,code = <ABS_X>;
-			abs-range = <3300 0>;
-			abs-fuzz = <4>;
-			abs-flat = <200>;
-		};
-
-		axis@1 {
-			reg = <1>;
-			linux,code = <ABS_Y>;
-			abs-range = <0 3300>;
-			abs-fuzz = <4>;
-			abs-flat = <200>;
+		port {
+			hdmi_connector_in: endpoint {
+				remote-endpoint = <&hdmi_connector_out>;
+			};
 		};
 	};
 };
 
-&ext {
-	clock-frequency = <12000000>;
+&headphones_amp {
+	VCC-supply = <&ldo5>;
+};
+
+&speaker_amp {
+	VCC-supply = <&ldo5>;
+};
+
+&sound_card {
+	simple-audio-card,widgets =
+		"Speaker", "Speaker",
+		"Headphone", "Headphones",
+		"Microphone", "Built-in Mic";
+	simple-audio-card,routing =
+		"Headphones Amp INL", "LHPOUT",
+		"Headphones Amp INR", "RHPOUT",
+		"Headphones", "Headphones Amp OUTL",
+		"Headphones", "Headphones Amp OUTR",
+		"Speaker Amp INL", "LOUT",
+		"Speaker Amp INR", "ROUT",
+		"Speaker", "Speaker Amp OUTL",
+		"Speaker", "Speaker Amp OUTR",
+		"LLINEIN", "Cap-less",
+		"RLINEIN", "Cap-less",
+		"Built-in Mic", "MICBIAS",
+		"MIC1P", "Built-in Mic",
+		"MIC1N", "Built-in Mic";
+	simple-audio-card,pin-switches = "Speaker", "Headphones";
+};
+
+&btn6 {
+	label = "Button Y";
+};
+
+&btn7 {
+	label = "Button X";
+};
+
+&gpio_keys {
+	btn13: button-13 {
+		label = "Power hold";
+		linux,code = <KEY_PAUSE>;
+		linux,can-disable;
+		gpios = <&gpf 11 GPIO_ACTIVE_LOW>;
+	};
+};
+
+&spi0_gpio {
+	status = "okay";
+
+	panel: nt39016@0 {
+		compatible = "kingdisplay,kd035g6-54nt";
+		reg = <0>;
+
+		spi-max-frequency = <3125000>;
+		spi-3wire;
+
+		reset-gpios = <&gpe 2 GPIO_ACTIVE_LOW>;
+
+		backlight = <&backlight>;
+		power-supply = <&ldo6>;
+
+		port {
+			panel_input: endpoint {
+				remote-endpoint = <&panel_output>;
+			};
+		};
+	};
+};
+
+&usb_conn {
+	vbus-supply = <&otg_vbus>;
+};
+
+&pmu {
+	power-supplies = <&act8600>, <&usb_conn>, <&dc_charger>;
+};
+
+&js_axis0 {
+	abs-range = <3300 0>;
+};
+
+&js_axis1 {
+	abs-range = <0 3300>;
 };
 
 &pinctrl {
-	pins_lcd: lcd {
-		function = "lcd";
-		groups = "lcd-24bit";
+	pins_i2c0: i2c0 {
+		function = "i2c0";
+		groups = "i2c0-data";
 	};
 
-	pins_uart2: uart2 {
-		function = "uart2";
-		groups = "uart2-data";
+	pins_i2c1: i2c1 {
+		function = "i2c1";
+		groups = "i2c1-data";
 	};
 
-	pins_mmc0: mmc0 {
-		function = "mmc0";
-		groups = "mmc0-1bit-a", "mmc0-4bit-a";
-	};
-
-	pins_mmc1: mmc1 {
-		function = "mmc1";
-		groups = "mmc1-1bit-d", "mmc1-4bit-d";
-	};
-
-	pins_otg: otg {
-		otg-vbus-pin {
-			function = "otg";
-			groups = "otg-vbus";
-		};
-
-		vbus-pin {
-			pins = "PB5";
-			bias-disable;
-		};
-	};
-
-	pins_pwm1: pwm1 {
-		function = "pwm1";
-		groups = "pwm1";
+	pins_it6610: it6610 {
+		pins = "PF12";
+		bias-pull-up;
 	};
 
 	pins_pwm4: pwm4 {
@@ -519,141 +293,63 @@
 	};
 };
 
-&uart2 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pins_uart2>;
-
-	status = "okay";
-};
-
-&cgu {
-	/*
-	 * Put high-speed peripherals under PLL1, such that we can change the
-	 * PLL0 frequency on demand without having to suspend peripherals.
-	 * We use a rate of 432 MHz, which is the least common multiple of
-	 * 27 MHz (required by TV encoder) and 48 MHz (required by USB host).
-	 * Put the GPU under PLL0 since we want a higher frequency.
-	 * Use the 32 kHz oscillator as the parent of the RTC for a higher
-	 * precision.
-	 */
-	assigned-clocks =
-		<&cgu JZ4770_CLK_PLL1>,
-		<&cgu JZ4770_CLK_GPU>,
-		<&cgu JZ4770_CLK_RTC>,
-		<&cgu JZ4770_CLK_UHC>,
-		<&cgu JZ4770_CLK_LPCLK_MUX>,
-		<&cgu JZ4770_CLK_MMC0_MUX>,
-		<&cgu JZ4770_CLK_MMC1_MUX>;
-	assigned-clock-parents =
-		<0>,
-		<&cgu JZ4770_CLK_PLL0>,
-		<&cgu JZ4770_CLK_OSC32K>,
-		<&cgu JZ4770_CLK_PLL1>,
-		<&cgu JZ4770_CLK_PLL1>,
-		<&cgu JZ4770_CLK_PLL1>,
-		<&cgu JZ4770_CLK_PLL1>;
-	assigned-clock-rates =
-		<432000000>,
-		<600000000>;
-};
-
 &uhc {
 	/* The WiFi module is connected to the UHC. */
 	status = "okay";
-};
-
-&tcu {
-	/*
-	 * 750 kHz for the system timer and clocksource, 12 MHz for the OST,
-	 * and use RTC as the parent for the watchdog clock
-	 */
-	assigned-clocks = <&tcu TCU_CLK_TIMER0>, <&tcu TCU_CLK_TIMER2>,
-			  <&tcu TCU_CLK_OST>, <&tcu TCU_CLK_WDT>;
-	assigned-clock-parents = <0>, <0>, <0>, <&cgu JZ4770_CLK_RTC>;
-	assigned-clock-rates = <750000>, <750000>, <12000000>;
-
-	/* PWM1 is in use, so use channel #2 for the clocksource */
-	ingenic,pwm-channels-mask = <0xfa>;
-};
-
-&usb_otg {
-	port {
-		usb_otg_ep: endpoint {
-			remote-endpoint = <&usb_ep>;
-		};
-	};
 };
 
 &otg_phy {
 	vcc-supply = <&ldo5>;
 };
 
-&rtc {
-	clocks = <&cgu JZ4770_CLK_RTC>;
-	clock-names = "rtc";
-
-	system-power-controller;
-};
-
-&mmc0 {
+&i2c0 {
 	status = "okay";
 
-	bus-width = <4>;
-	max-frequency = <48000000>;
-	vmmc-supply = <&vcc>;
-	non-removable;
-
 	pinctrl-names = "default";
-	pinctrl-0 = <&pins_mmc0>;
-};
+	pinctrl-0 = <&pins_i2c0>;
 
-&mmc1 {
-	status = "okay";
+	clock-frequency = <400000>; /* 400 kHz */
 
-	bus-width = <4>;
-	max-frequency = <48000000>;
-	cd-gpios = <&gpb 2 GPIO_ACTIVE_LOW>;
-	vmmc-supply = <&mmc1_power>;
+	radio: radio@11 {
+		compatible = "rda,rda5807";
+		reg = <0x11>;
 
-	pinctrl-names = "default";
-	pinctrl-0 = <&pins_mmc1>;
-};
+		rda,lnan;
+		rda,lnap;
+		rda,analog-out;
 
-&lcd {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pins_lcd>;
-
-	ports {
-		#address-cells = <1>;
-		#size-cells = <0>;
-
-		port@0 {
-			#address-cells = <1>;
-			#size-cells = <0>;
-			reg = <0>;
-
-			panel_output: endpoint@0 {
-				reg = <0>;
-				remote-endpoint = <&panel_input>;
-			};
-
-			/* TODO: endpoint #1 to HDMI chip */
-		};
-
-		port@8 {
-			reg = <8>;
-
-			ipu_output: endpoint {
-				remote-endpoint = <&ipu_input>;
-			};
-		};
+		power-supply = <&ldo6>;
 	};
 };
 
-&ipu {
-	port {
-		ipu_input: endpoint {
-			remote-endpoint = <&ipu_output>;
+&i2c1 {
+	status = "okay";
+
+	pinctrl-names = "default";
+	pinctrl-0 = <&pins_i2c1>;
+
+	clock-frequency = <100000>; /* 100 kHz */
+
+	accelerometer@15 {
+		compatible = "memsic,mxc6225";
+		reg = <0x15>;
+	};
+};
+
+&lcd_ports {
+	port@0 {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg = <0>;
+
+		panel_output: endpoint@0 {
+			reg = <0>;
+			remote-endpoint = <&panel_input>;
+		};
+
+		hdmi_output: endpoint@1 {
+			reg = <1>;
+			remote-endpoint = <&hdmi_input>;
 		};
 	};
 };

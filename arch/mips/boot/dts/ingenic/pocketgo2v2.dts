@@ -1,0 +1,58 @@
+// SPDX-License-Identifier: GPL-2.0
+/dts-v1/;
+
+#include "pocketgo2.dts"
+
+/ {
+	compatible = "wolsen,pocketgo2v2", "ingenic,jz4770";
+	model = "Wolsen PocketGo2/PlayGo Rev. 2";
+};
+
+&sound_card {
+	simple-audio-card,widgets =
+		"Speaker", "Speaker",
+		"Headphone", "Headphones";
+	simple-audio-card,routing =
+		"Headphones Amp INL", "LHPOUT",
+		"Headphones Amp INR", "RHPOUT",
+		"Headphones", "Headphones Amp OUTL",
+		"Headphones", "Headphones Amp OUTR",
+		"Speaker Amp INL", "Headphones Amp OUTL",
+		"Speaker Amp INR", "Headphones Amp OUTR",
+		"Speaker", "Speaker Amp OUTL",
+		"Speaker", "Speaker Amp OUTR";
+	simple-audio-card,pin-switches = "Speaker";
+};
+
+&joystick {
+	io-channels = <&adc INGENIC_ADC_TOUCH_YP>,
+		      <&adc INGENIC_ADC_TOUCH_XP>;
+};
+
+&js_axis0 {
+	abs-range = <2400 200>;
+};
+
+&js_axis1 {
+	abs-range = <2200 0>;
+};
+
+&btn8 {
+	gpios = <&gpb 10 GPIO_ACTIVE_LOW>;
+};
+
+&btn13 {
+	gpios = <&gpb 20 GPIO_ACTIVE_LOW>;
+};
+
+&btn14 {
+	gpios = <&gpb 11 GPIO_ACTIVE_LOW>;
+};
+
+&btn15 {
+	gpios = <&gpb 12 GPIO_ACTIVE_LOW>;
+};
+
+&btn16 {
+	gpios = <&gpb 13 GPIO_ACTIVE_LOW>;
+};
