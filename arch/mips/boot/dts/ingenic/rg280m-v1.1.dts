@@ -1,0 +1,49 @@
+// SPDX-License-Identifier: GPL-2.0
+/dts-v1/;
+
+#include "rg280v.dts"
+
+/ {
+	compatible = "ylm,rg280m-v1.1", "ingenic,jz4770";
+	model = "Anbernic RG-280M v1.1";
+};
+
+&joystick {
+	status = "okay";
+
+	io-channels = <&adc INGENIC_ADC_TOUCH_YP>,
+		      <&adc INGENIC_ADC_TOUCH_XP>;
+};
+
+&js_axis0 {
+	abs-range = <3000 200>;
+};
+
+&js_axis1 {
+	abs-range = <3000 200>;
+};
+
+&sound_card {
+	simple-audio-card,routing =
+		"Headphones Amp INL", "LHPOUT",
+		"Headphones Amp INR", "RHPOUT",
+		"Headphones", "Headphones Amp OUTL",
+		"Headphones", "Headphones Amp OUTR",
+		"Speaker Amp INL", "Headphones Amp OUTL",
+		"Speaker Amp INR", "Headphones Amp OUTR",
+		"Speaker", "Speaker Amp OUTL",
+		"Speaker", "Speaker Amp OUTR";
+};
+
+&gpio_keys {
+	btn17: button-17 {
+		label = "L3 joystick button";
+		linux,code = <KEY_KPSLASH>;
+		linux,can-disable;
+		gpios = <&gpb 14 GPIO_ACTIVE_LOW>;
+	};
+};
+
+&uhc {
+	status = "okay";
+};
