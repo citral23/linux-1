@@ -488,6 +488,19 @@
 
 		clocks = <&cgu JZ4770_CLK_LPCLK_MUX>;
 		clock-names = "lcd_pclk";
+
+		lcd_ports: ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			port@8 {
+				reg = <8>;
+
+				ipu_output: endpoint {
+					remote-endpoint = <&ipu_input>;
+				};
+			};
+		};
 	};
 
 	ipu: ipu@13080000 {
@@ -499,6 +512,12 @@
 
 		clocks = <&cgu JZ4770_CLK_IPU>;
 		clock-names = "ipu";
+
+		port {
+			ipu_input: endpoint {
+				remote-endpoint = <&ipu_output>;
+			};
+		};
 	};
 
 	vpu: video-decoder@132a0000 {
