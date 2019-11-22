@@ -1,0 +1,471 @@
+// SPDX-License-Identifier: GPL-2.0
+
+#include "../jz4770.dtsi"
+
+#include <dt-bindings/clock/ingenic,tcu.h>
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/iio/adc/ingenic,adc.h>
+#include <dt-bindings/input/input.h>
+
+/ {
+	aliases {
+		serial0 = &uart0;
+		serial1 = &uart1;
+		serial2 = &uart2;
+		serial3 = &uart3;
+	};
+
+	memory: memory {
+		device_type = "memory";
+		reg = <0x0 0x10000000>,
+		      <0x30000000 0x10000000>;
+	};
+
+	chosen {
+		stdout-path = "serial2:57600n8";
+	};
+
+	vcc: regulator-0 {
+		compatible = "regulator-fixed";
+		regulator-name = "vcc";
+
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		regulator-always-on;
+	};
+
+	mmc1_power: regulator-1 {
+		compatible = "regulator-fixed";
+		regulator-name = "mmc1_vcc";
+		gpio = <&gpe 9 0>;
+
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		vin-supply = <&vcc>;
+	};
+
+	headphones_amp: analog-amplifier-0 {
+		compatible = "simple-audio-amplifier";
+		enable-gpios = <&gpf 3 GPIO_ACTIVE_LOW>;
+		enable-delay-ms = <50>;
+
+		VCC-supply = <&vcc>;
+		sound-name-prefix = "Headphones Amp";
+	};
+
+	speaker_amp: analog-amplifier-1 {
+		compatible = "simple-audio-amplifier";
+		enable-gpios = <&gpf 20 GPIO_ACTIVE_HIGH>;
+
+		VCC-supply = <&vcc>;
+		sound-name-prefix = "Speaker Amp";
+	};
+
+	sound_card: sound {
+		compatible = "simple-audio-card";
+
+		simple-audio-card,name = "gcw0-audio";
+		simple-audio-card,format = "i2s";
+
+		simple-audio-card,hp-det-gpio = <&gpf 21 GPIO_ACTIVE_LOW>;
+		simple-audio-card,aux-devs = <&speaker_amp>, <&headphones_amp>;
+
+		simple-audio-card,bitclock-master = <&dai_codec>;
+		simple-audio-card,frame-master = <&dai_codec>;
+
+		dai_cpu: simple-audio-card,cpu {
+			sound-dai = <&aic>;
+		};
+
+		dai_codec: simple-audio-card,codec {
+			sound-dai = <&codec>;
+		};
+	};
+
+	backlight: backlight {
+		compatible = "pwm-backlight";
+		pwms = <&pwm 1 40000 0>;
+		power-supply = <&vcc>;
+
+		brightness-levels = <0 4 8 9 10 12 16 32 64 96 128 192 255>;
+		default-brightness-level = <8>;
+
+		pinctrl-names = "init", "default";
+		pinctrl-0 = <&pins_pwm1_sleep>;
+		pinctrl-1 = <&pins_pwm1>;
+	};
+
+	gpio_keys: gpio-keys {
+		compatible = "gpio-keys";
+		autorepeat;
+
+		button-0 {
+			label = "D-pad up";
+			linux,code = <KEY_UP>;
+			linux,can-disable;
+			gpios = <&gpe 21 GPIO_ACTIVE_LOW>;
+		};
+
+		button-1 {
+			label = "D-pad down";
+			linux,code = <KEY_DOWN>;
+			linux,can-disable;
+			gpios = <&gpe 25 GPIO_ACTIVE_LOW>;
+		};
+
+		button-2 {
+			label = "D-pad left";
+			linux,code = <KEY_LEFT>;
+			linux,can-disable;
+			gpios = <&gpe 23 GPIO_ACTIVE_LOW>;
+		};
+
+		button-3 {
+			label = "D-pad right";
+			linux,code = <KEY_RIGHT>;
+			linux,can-disable;
+			gpios = <&gpe 24 GPIO_ACTIVE_LOW>;
+		};
+
+		button-4 {
+			label = "Button A";
+			linux,code = <KEY_LEFTCTRL>;
+			linux,can-disable;
+			gpios = <&gpe 29 GPIO_ACTIVE_LOW>;
+		};
+
+		button-5 {
+			label = "Button B";
+			linux,code = <KEY_LEFTALT>;
+			linux,can-disable;
+			gpios = <&gpe 20 GPIO_ACTIVE_LOW>;
+		};
+
+		btn6: button-6 {
+			label = "Button X";
+			linux,code = <KEY_SPACE>;
+			linux,can-disable;
+			gpios = <&gpe 27 GPIO_ACTIVE_LOW>;
+		};
+
+		btn7: button-7 {
+			label = "Button Y";
+			linux,code = <KEY_LEFTSHIFT>;
+			linux,can-disable;
+			gpios = <&gpe 28 GPIO_ACTIVE_LOW>;
+		};
+
+		btn8: button-8 {
+			label = "Left shoulder button";
+			linux,code = <KEY_TAB>;
+			linux,can-disable;
+			gpios = <&gpb 20 GPIO_ACTIVE_LOW>;
+		};
+
+		btn9: button-9 {
+			label = "Right shoulder button";
+			linux,code = <KEY_BACKSPACE>;
+			linux,can-disable;
+			gpios = <&gpe 26 GPIO_ACTIVE_LOW>;
+		};
+
+		button-10 {
+			label = "Start button";
+			linux,code = <KEY_ENTER>;
+			linux,can-disable;
+			gpios = <&gpb 21 GPIO_ACTIVE_LOW>;
+		};
+
+		button-11 {
+			label = "Select button";
+			linux,code = <KEY_ESC>;
+			linux,can-disable;
+			/*
+			 * This is the only button that is active high,
+			 * since it doubles as BOOT_SEL1.
+			 */
+			gpios = <&gpd 18 GPIO_ACTIVE_HIGH>;
+		};
+
+		btn12: button-12 {
+			label = "Power button";
+			linux,code = <KEY_POWER>;
+			linux,can-disable;
+			gpios = <&gpa 30 GPIO_ACTIVE_LOW>;
+			wakeup-source;
+		};
+	};
+
+	/*
+	 * SPI-over-GPIO, using the pins of the SSI0 controller.
+	 * This is useful for the devices that require 3-wire communication,
+	 * as the SSI controller in Ingenic SoCs does not support it.
+	 */
+	spi0_gpio: spi {
+		compatible = "spi-gpio";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		status = "disabled";
+
+		sck-gpios = <&gpe 15 GPIO_ACTIVE_HIGH>;
+		mosi-gpios = <&gpe 17 GPIO_ACTIVE_HIGH>;
+		cs-gpios = <&gpe 16 GPIO_ACTIVE_HIGH>;
+		num-chipselects = <1>;
+	};
+
+	usb_conn: connector {
+		compatible = "gpio-usb-b-connector", "usb-b-connector";
+		label = "mini-USB";
+		type = "mini";
+
+		/*
+		 * USB OTG is not yet working reliably, the ID detection
+		 * mechanism tends to fry easily for unknown reasons.
+		 * Until this is fixed, disable OTG by not providing the
+		 * ID GPIO to the driver.
+		 */
+		//id-gpios = <&gpf 18 GPIO_ACTIVE_LOW>;
+
+		vbus-gpios = <&gpb 5 GPIO_ACTIVE_HIGH>;
+		vbus-supply = <&vcc>;
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&pins_otg>;
+
+		port {
+			usb_ep: endpoint {
+				remote-endpoint = <&usb_otg_ep>;
+			};
+		};
+	};
+
+	battery: battery {
+		compatible = "simple-battery";
+		voltage-min-design-microvolt = <3400000>;
+		voltage-max-design-microvolt = <4200000>;
+	};
+
+	vdiv: voltage-divider {
+		compatible = "voltage-divider";
+		#io-channel-cells = <0>;
+
+		output-ohms = <332000>;
+		full-ohms = <1332000>;
+
+		io-channels = <&adc INGENIC_ADC_BATTERY>;
+	};
+
+	pmu: pmu {
+		compatible = "ingenic,jz4770-battery", "ingenic,jz4740-battery";
+		io-channels = <&vdiv>;
+		io-channel-names = "battery";
+		monitored-battery = <&battery>;
+
+		power-supplies = <&usb_conn>;
+	};
+
+	joystick: joystick {
+		compatible = "adc-joystick";
+		io-channels = <&adc INGENIC_ADC_TOUCH_XP>,
+			      <&adc INGENIC_ADC_TOUCH_YP>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		js_axis0: axis@0 {
+			reg = <0>;
+			linux,code = <ABS_X>;
+			abs-fuzz = <4>;
+			abs-flat = <200>;
+		};
+
+		js_axis1: axis@1 {
+			reg = <1>;
+			linux,code = <ABS_Y>;
+			abs-fuzz = <4>;
+			abs-flat = <200>;
+		};
+	};
+
+	leds: leds {
+		compatible = "gpio-leds";
+
+		power_led: led {
+			label = "power";
+			gpios = <&gpb 30 GPIO_ACTIVE_LOW>;
+			default-state = "on";
+			panic-indicator;
+			retain-state-suspended;
+		};
+	};
+
+	cpu_opp_table: opp-table {
+		compatible = "operating-points-v2";
+
+		opp-444000000 { opp-hz = /bits/ 64 <444000000>; };
+		opp-492000000 { opp-hz = /bits/ 64 <492000000>; };
+		opp-600000000 { opp-hz = /bits/ 64 <600000000>; };
+		opp-696000000 { opp-hz = /bits/ 64 <696000000>; };
+		opp-792000000 { opp-hz = /bits/ 64 <792000000>; };
+		opp-900000000 { opp-hz = /bits/ 64 <900000000>; };
+		opp-996000000 { opp-hz = /bits/ 64 <996000000>; };
+		opp-1092000000 { opp-hz = /bits/ 64 <1092000000>; };
+		opp-1200000000 { opp-hz = /bits/ 64 <1200000000>; };
+	};
+};
+
+&ext {
+	clock-frequency = <12000000>;
+};
+
+&cpu0 {
+	operating-points-v2 = <&cpu_opp_table>;
+
+	/* We use the main PLL as the CPU clock for the cpufreq driver. */
+	clocks = <&cgu JZ4770_CLK_PLL0>;
+};
+
+&pinctrl {
+	pins_lcd: lcd {
+		function = "lcd";
+		groups = "lcd-24bit";
+	};
+
+	pins_uart2: uart2 {
+		function = "uart2";
+		groups = "uart2-data";
+	};
+
+	pins_mmc0: mmc0 {
+		function = "mmc0";
+		groups = "mmc0-1bit-a", "mmc0-4bit-a";
+	};
+
+	pins_mmc1: mmc1 {
+		function = "mmc1";
+		groups = "mmc1-1bit-d", "mmc1-4bit-d";
+	};
+
+	pins_otg: otg {
+		otg-vbus-pin {
+			function = "otg";
+			groups = "otg-vbus";
+		};
+
+		vbus-pin {
+			pins = "PB5";
+			bias-disable;
+		};
+	};
+
+	pwm1 {
+		pins_pwm1_sleep: pwm1-sleep {
+			pins = "PE1";
+			output-low;
+		};
+
+		pins_pwm1: pwm1-default {
+			function = "pwm1";
+			groups = "pwm1";
+		};
+	};
+};
+
+&lcd {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pins_lcd>;
+};
+
+&uart2 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pins_uart2>;
+
+	status = "okay";
+};
+
+&cgu {
+	/*
+	 * Put high-speed peripherals under PLL1, such that we can change the
+	 * PLL0 frequency on demand without having to suspend peripherals.
+	 * We use a rate of 432 MHz, which is the least common multiple of
+	 * 27 MHz (required by TV encoder) and 48 MHz (required by USB host).
+	 * Put the GPU under PLL0 since we want a higher frequency.
+	 * Use the 32 kHz oscillator as the parent of the RTC for a higher
+	 * precision.
+	 */
+	assigned-clocks =
+		<&cgu JZ4770_CLK_PLL1>,
+		<&cgu JZ4770_CLK_GPU>,
+		<&cgu JZ4770_CLK_RTC>,
+		<&cgu JZ4770_CLK_UHC>,
+		<&cgu JZ4770_CLK_LPCLK_MUX>,
+		<&cgu JZ4770_CLK_MMC0_MUX>,
+		<&cgu JZ4770_CLK_MMC1_MUX>;
+	assigned-clock-parents =
+		<0>,
+		<&cgu JZ4770_CLK_PLL0>,
+		<&cgu JZ4770_CLK_OSC32K>,
+		<&cgu JZ4770_CLK_PLL1>,
+		<&cgu JZ4770_CLK_PLL1>,
+		<&cgu JZ4770_CLK_PLL1>,
+		<&cgu JZ4770_CLK_PLL1>;
+	assigned-clock-rates =
+		<432000000>,
+		<600000000>;
+};
+
+&tcu {
+	/*
+	 * 750 kHz for the system timer and clocksource, 12 MHz for the OST,
+	 * and use RTC as the parent for the watchdog clock
+	 */
+	assigned-clocks = <&tcu TCU_CLK_TIMER0>, <&tcu TCU_CLK_TIMER2>,
+			  <&tcu TCU_CLK_OST>, <&tcu TCU_CLK_WDT>;
+	assigned-clock-parents = <0>, <0>, <0>, <&cgu JZ4770_CLK_RTC>;
+	assigned-clock-rates = <750000>, <750000>, <12000000>;
+
+	/* PWM1 is in use, so use channel #2 for the clocksource */
+	ingenic,pwm-channels-mask = <0xfa>;
+};
+
+&usb_otg {
+	port {
+		usb_otg_ep: endpoint {
+			remote-endpoint = <&usb_ep>;
+		};
+	};
+};
+
+&otg_phy {
+	vcc-supply = <&vcc>;
+};
+
+&rtc {
+	clocks = <&cgu JZ4770_CLK_RTC>;
+	clock-names = "rtc";
+
+	system-power-controller;
+};
+
+&mmc0 {
+	status = "okay";
+
+	bus-width = <4>;
+	max-frequency = <50000000>;
+	vmmc-supply = <&vcc>;
+	non-removable;
+
+	pinctrl-names = "default";
+	pinctrl-0 = <&pins_mmc0>;
+};
+
+&mmc1 {
+	status = "okay";
+
+	bus-width = <4>;
+	max-frequency = <50000000>;
+	cd-gpios = <&gpb 2 GPIO_ACTIVE_LOW>;
+	vmmc-supply = <&mmc1_power>;
+
+	pinctrl-names = "default";
+	pinctrl-0 = <&pins_mmc1>;
+};
