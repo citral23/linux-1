@@ -1,0 +1,119 @@
+// SPDX-License-Identifier: GPL-2.0
+/dts-v1/;
+
+#include "bits/gcw0-base.dtsi"
+
+/ {
+	compatible = "ylm,rg280v", "ingenic,jz4770";
+	model = "Anbernic RG-280V";
+
+	rumble: rumble {
+		compatible = "pwm-vibrator";
+		pwms = <&pwm 4 2000000 0>;
+		pwm-names = "enable";
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&pins_pwm4>;
+	};
+};
+
+&joystick {
+	status = "disabled";
+};
+
+&btn8 {
+	gpios = <&gpb 10 GPIO_ACTIVE_LOW>;
+};
+
+&gpio_keys {
+	btn13: button-13 {
+		label = "L2 shoulder button";
+		linux,code = <KEY_PAGEUP>;
+		linux,can-disable;
+		gpios = <&gpb 20 GPIO_ACTIVE_LOW>;
+	};
+
+	btn14: button-14 {
+		label = "R2 shoulder button";
+		linux,code = <KEY_PAGEDOWN>;
+		linux,can-disable;
+		gpios = <&gpb 11 GPIO_ACTIVE_LOW>;
+	};
+
+	btn15: button-15 {
+		label = "Volume+ button";
+		linux,code = <KEY_VOLUMEUP>;
+		linux,can-disable;
+		gpios = <&gpb 12 GPIO_ACTIVE_LOW>;
+	};
+
+	btn16: button-16 {
+		label = "Volume- button";
+		linux,code = <KEY_VOLUMEDOWN>;
+		linux,can-disable;
+		gpios = <&gpb 13 GPIO_ACTIVE_LOW>;
+	};
+};
+
+&sound_card {
+	simple-audio-card,widgets =
+		"Speaker", "Speaker",
+		"Headphone", "Headphones";
+	simple-audio-card,routing =
+		"Headphones Amp INL", "LHPOUT",
+		"Headphones Amp INR", "RHPOUT",
+		"Headphones", "Headphones Amp OUTL",
+		"Headphones", "Headphones Amp OUTR",
+		"Speaker Amp INL", "LOUT",
+		"Speaker Amp INR", "ROUT",
+		"Speaker", "Speaker Amp OUTL",
+		"Speaker", "Speaker Amp OUTR";
+	simple-audio-card,pin-switches = "Speaker";
+};
+
+&pinctrl {
+	pins_pwm4: pwm4 {
+		function = "pwm4";
+		groups = "pwm4";
+	};
+};
+
+&spi0_gpio {
+	status = "okay";
+
+	panel: panel@0 {
+		compatible = "abt,y030xx067a";
+		reg = <0>;
+
+		spi-max-frequency = <3125000>;
+		spi-3wire;
+
+		reset-gpios = <&gpe 2 GPIO_ACTIVE_LOW>;
+
+		backlight = <&backlight>;
+		power-supply = <&vcc>;
+
+		port {
+			panel_input: endpoint {
+				remote-endpoint = <&panel_output>;
+			};
+		};
+	};
+};
+
+&pins_lcd {
+	groups = "lcd-8bit";
+};
+
+&lcd_ports {
+	lcd_port0: port@0 {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg = <0>;
+
+		panel_output: endpoint@0 {
+			reg = <0>;
+			remote-endpoint = <&panel_input>;
+		};
+	};
+};
