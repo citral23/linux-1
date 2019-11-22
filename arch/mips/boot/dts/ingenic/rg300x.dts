@@ -1,0 +1,27 @@
+// SPDX-License-Identifier: GPL-2.0
+/dts-v1/;
+
+#include "rg350m.dts"
+
+#include <dt-bindings/interrupt-controller/irq.h>
+
+/ {
+	compatible = "ylm,rg300x", "ingenic,jz4770";
+	model = "Anbernic RG-300X";
+};
+
+&panel {
+	compatible = "focaltech,gpt3";
+};
+
+&btn17 {
+	status = "disabled";
+};
+
+&btn18 {
+	status = "disabled";
+};
+
+&joystick {
+	status = "disabled";
+};
