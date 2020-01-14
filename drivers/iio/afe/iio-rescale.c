@@ -232,6 +232,14 @@ static int rescale_read_avail(struct iio_dev *indio_dev,
 		*type = IIO_VAL_INT;
 		return iio_read_avail_channel_raw(rescale->source,
 						  vals, length);
+	case IIO_CHAN_INFO_SCALE:
+		if (rescale->scale_len) {
+			*type = rescale->scale_type;
+			*length = rescale->scale_len;
+			*vals = rescale->scale_data;
+			return IIO_AVAIL_LIST;
+		}
+		fallthrough;
 	default:
 		return -EINVAL;
 	}
@@ -266,11 +274,61 @@ static ssize_t rescale_write_ext_info(struct iio_dev *indio_dev,
 					  buf, len);
 }
 
+static int rescale_init_scale_avail(struct device *dev, struct rescale *rescale)
+{
+	int ret, type, length, *data;
+	const int *scale_raw;
+	unsigned int i;
+
+	ret = iio_read_avail_channel_attribute(rescale->source, &scale_raw,
+					       &type, &length,
+					       IIO_CHAN_INFO_SCALE);
+	if (ret < 0)
+		return ret;
+
+	/* TODO: Support IIO_AVAIL_RANGE */
+	if (ret != IIO_AVAIL_LIST)
+		return -ENOTSUPP;
+
+	length <<= type == IIO_VAL_INT;
+
+	data = devm_kzalloc(dev, sizeof(*data) * length, GFP_KERNEL);
+	if (!data)
+		return -ENOMEM;
+
+	if (type == IIO_VAL_INT) {
+		/* Convert from integer to fractional form to ease processing */
+		for (i = 0; i < length / 2; i++) {
+			data[i * 2] = scale_raw[i];
+			data[i * 2 + 1] = 1;
+		}
+
+		type = IIO_VAL_FRACTIONAL;
+	} else {
+		/* Copy raw scale info into our own buffer */
+		memcpy(data, scale_raw, sizeof(*scale_raw) * length);
+	}
+
+	for (i = 0; i < length; i += 2) {
+		ret = rescale_process_scale(rescale, type,
+					    &data[i], &data[i + 1]);
+		if (ret < 0)
+			return ret;
+	}
+
+	rescale->scale_type = type;
+	rescale->scale_len = length;
+	rescale->scale_data = data;
+
+	return 0;
+}
+
 static int rescale_configure_channel(struct device *dev,
 				     struct rescale *rescale)
 {
 	struct iio_chan_spec *chan = &rescale->chan;
 	struct iio_chan_spec const *schan = rescale->source->channel;
+	int ret;
 
 	chan->indexed = 1;
 	chan->output = schan->output;
@@ -302,6 +360,14 @@ static int rescale_configure_channel(struct device *dev,
 	if (iio_channel_has_available(schan, IIO_CHAN_INFO_RAW) &&
 	    !rescale->chan_processed)
 		chan->info_mask_separate_available |= BIT(IIO_CHAN_INFO_RAW);
+
+	if (iio_channel_has_available(schan, IIO_CHAN_INFO_SCALE)) {
+		chan->info_mask_separate_available |= BIT(IIO_CHAN_INFO_SCALE);
+
+		ret = rescale_init_scale_avail(dev, rescale);
+		if (ret)
+			return ret;
+	}
 
 	return 0;
 }
