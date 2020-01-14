@@ -234,6 +234,18 @@ static int rescale_read_avail(struct iio_dev *indio_dev,
 		*type = IIO_VAL_INT;
 		return iio_read_avail_channel_raw(rescale->source,
 						  vals, length);
+	case IIO_CHAN_INFO_SCALE:
+		if (rescale->chan_processed) {
+			return iio_read_avail_channel_attribute(rescale->source,
+								vals, type,
+								length,
+								IIO_CHAN_INFO_SCALE);
+		} else if (rescale->scale_len) {
+			*length = rescale->scale_len;
+			*vals = rescale->scale_data;
+			return IIO_AVAIL_LIST_WITH_TYPE;
+		}
+		fallthrough;
 	default:
 		return -EINVAL;
 	}
@@ -268,11 +280,74 @@ static ssize_t rescale_write_ext_info(struct iio_dev *indio_dev,
 					  buf, len);
 }
 
+static int rescale_init_scale_avail(struct device *dev, struct rescale *rescale)
+{
+	int ret, type, length, *data;
+	const int *scale_raw;
+	unsigned int i;
+	size_t out_len;
+
+	ret = iio_read_avail_channel_attribute(rescale->source, &scale_raw,
+					       &type, &length,
+					       IIO_CHAN_INFO_SCALE);
+	if (ret < 0)
+		return ret;
+
+	switch (ret) {
+	case IIO_AVAIL_LIST_WITH_TYPE:
+		out_len = length;
+		break;
+	case IIO_AVAIL_LIST:
+		if (type == IIO_VAL_INT)
+			out_len = length * 3 / 1;
+		else
+			out_len = length * 3 / 2;
+		break;
+	default:
+		/* TODO: Support IIO_AVAIL_RANGE */
+		return -ENOTSUPP;
+	}
+
+	data = devm_kzalloc(dev, sizeof(*data) * out_len, GFP_KERNEL);
+	if (!data)
+		return -ENOMEM;
+
+	if (ret == IIO_AVAIL_LIST_WITH_TYPE) {
+		memcpy(data, scale_raw, sizeof(*scale_raw) * length);
+	} else if (type == IIO_VAL_INT) {
+		for (i = 0; i < length; i++) {
+			data[i * 3 + 0] = scale_raw[i];
+			data[i * 3 + 2] = IIO_VAL_INT;
+		}
+	} else {
+		for (i = 0; i < length / 2; i++) {
+			data[i * 3 + 0] = scale_raw[i * 2];
+			data[i * 3 + 1] = scale_raw[i * 2 + 1];
+			data[i * 3 + 2] = type;
+		}
+	}
+
+	for (i = 0; i < out_len; i += 3) {
+		ret = rescale_process_scale(rescale, data[i + 2],
+					    &data[i], &data[i + 1]);
+		if (ret < 0)
+			return ret;
+
+		data[i + 2] = ret;
+	}
+
+	rescale->scale_len = out_len;
+	rescale->scale_data = data;
+
+	return 0;
+}
+
 static int rescale_configure_channel(struct device *dev,
 				     struct rescale *rescale)
 {
 	struct iio_chan_spec *chan = &rescale->chan;
 	struct iio_chan_spec const *schan = rescale->source->channel;
+	int ret;
 
 	chan->indexed = 1;
 	chan->output = schan->output;
@@ -304,6 +379,16 @@ static int rescale_configure_channel(struct device *dev,
 	if (iio_channel_has_available(schan, IIO_CHAN_INFO_RAW) &&
 	    !rescale->chan_processed)
 		chan->info_mask_separate_available |= BIT(IIO_CHAN_INFO_RAW);
+
+	if (iio_channel_has_available(schan, IIO_CHAN_INFO_SCALE)) {
+		chan->info_mask_separate_available |= BIT(IIO_CHAN_INFO_SCALE);
+
+		if (!rescale->chan_processed) {
+			ret = rescale_init_scale_avail(dev, rescale);
+			if (ret)
+				return ret;
+		}
+	}
 
 	return 0;
 }
