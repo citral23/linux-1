@@ -26,6 +26,8 @@ struct rescale {
 	s32 numerator;
 	s32 denominator;
 	s32 offset;
+	int scale_len;
+	int *scale_data;
 };
 
 int rescale_process_scale(struct rescale *rescale, int scale_type,
