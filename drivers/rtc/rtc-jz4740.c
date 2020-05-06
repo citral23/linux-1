@@ -38,6 +38,12 @@
 #define JZ_RTC_CTRL_AE		BIT(2)
 #define JZ_RTC_CTRL_ENABLE	BIT(0)
 
+#define JZ_RTC_REGULATOR_NC1HZ_LSB	0
+#define JZ_RTC_REGULATOR_NC1HZ_MASK	GENMASK(15, 0)
+
+#define JZ_RTC_REGULATOR_ADJC_LSB	16
+#define JZ_RTC_REGULATOR_ADJC_MASK	GENMASK(25, 16)
+
 /* Magic value to enable writes on jz4780 */
 #define JZ_RTC_WENR_MAGIC	0xA55A
 
@@ -55,6 +61,7 @@ struct jz4740_rtc {
 	enum jz4740_rtc_type type;
 
 	struct rtc_device *rtc;
+	struct clk *clk;
 
 	spinlock_t lock;
 };
@@ -216,12 +223,54 @@ static int jz4740_rtc_alarm_irq_enable(struct device *dev, unsigned int enable)
 	return jz4740_rtc_ctrl_set_bits(rtc, JZ_RTC_CTRL_AF_IRQ, enable);
 }
 
+static int jz4740_rtc_read_offset(struct device *dev, long *offset)
+{
+	struct jz4740_rtc *rtc = dev_get_drvdata(dev);
+	long rate = clk_get_rate(rtc->clk);
+	s32 nc1hz, adjc, offset1k;
+	u32 reg;
+
+	reg = jz4740_rtc_reg_read(rtc, JZ_REG_RTC_REGULATOR);
+	nc1hz = (reg & JZ_RTC_REGULATOR_NC1HZ_MASK)
+		>> JZ_RTC_REGULATOR_NC1HZ_LSB;
+	adjc = (reg & JZ_RTC_REGULATOR_ADJC_MASK)
+		>> JZ_RTC_REGULATOR_ADJC_LSB;
+
+	offset1k = (nc1hz - rate + 1) * 1024L + adjc;
+	*offset = offset1k * 1000000L / (rate * 1024L);
+
+	return 0;
+}
+
+static int jz4740_rtc_set_offset(struct device *dev, long offset)
+{
+	struct jz4740_rtc *rtc = dev_get_drvdata(dev);
+	long rate = clk_get_rate(rtc->clk);
+	s32 offset1k, adjc, nc1hz;
+
+	offset1k = div_s64_rem(offset * rate * 1024LL, 1000000LL, &adjc);
+	nc1hz = rate - 1 + offset1k / 1024L;
+
+	if (adjc < 0) {
+		nc1hz--;
+		adjc += 1024;
+	}
+
+	nc1hz = (nc1hz << JZ_RTC_REGULATOR_NC1HZ_LSB)
+		& JZ_RTC_REGULATOR_NC1HZ_MASK;
+	adjc = (adjc << JZ_RTC_REGULATOR_ADJC_LSB) & JZ_RTC_REGULATOR_ADJC_MASK;
+
+	return jz4740_rtc_reg_write(rtc, JZ_REG_RTC_REGULATOR, nc1hz | adjc);
+}
+
 static const struct rtc_class_ops jz4740_rtc_ops = {
 	.read_time	= jz4740_rtc_read_time,
 	.set_time	= jz4740_rtc_set_time,
 	.read_alarm	= jz4740_rtc_read_alarm,
 	.set_alarm	= jz4740_rtc_set_alarm,
 	.alarm_irq_enable = jz4740_rtc_alarm_irq_enable,
+	.read_offset	= jz4740_rtc_read_offset,
+	.set_offset	= jz4740_rtc_set_offset,
 };
 
 static irqreturn_t jz4740_rtc_irq(int irq, void *data)
@@ -312,7 +361,6 @@ static int jz4740_rtc_probe(struct platform_device *pdev)
 	struct device_node *np = dev->of_node;
 	struct jz4740_rtc *rtc;
 	unsigned long rate;
-	struct clk *clk;
 	int ret, irq;
 
 	rtc = devm_kzalloc(dev, sizeof(*rtc), GFP_KERNEL);
@@ -329,19 +377,19 @@ static int jz4740_rtc_probe(struct platform_device *pdev)
 	if (IS_ERR(rtc->base))
 		return PTR_ERR(rtc->base);
 
-	clk = devm_clk_get(dev, "rtc");
-	if (IS_ERR(clk)) {
+	rtc->clk = devm_clk_get(dev, "rtc");
+	if (IS_ERR(rtc->clk)) {
 		dev_err(dev, "Failed to get RTC clock\n");
-		return PTR_ERR(clk);
+		return PTR_ERR(rtc->clk);
 	}
 
-	ret = clk_prepare_enable(clk);
+	ret = clk_prepare_enable(rtc->clk);
 	if (ret) {
 		dev_err(dev, "Failed to enable clock\n");
 		return ret;
 	}
 
-	ret = devm_add_action_or_reset(dev, jz4740_rtc_clk_disable, clk);
+	ret = devm_add_action_or_reset(dev, jz4740_rtc_clk_disable, rtc->clk);
 	if (ret) {
 		dev_err(dev, "Failed to register devm action\n");
 		return ret;
@@ -369,7 +417,7 @@ static int jz4740_rtc_probe(struct platform_device *pdev)
 	rtc->rtc->ops = &jz4740_rtc_ops;
 	rtc->rtc->range_max = U32_MAX;
 
-	rate = clk_get_rate(clk);
+	rate = clk_get_rate(rtc->clk);
 	jz4740_rtc_set_wakeup_params(rtc, np, rate);
 
 	/* Each 1 Hz pulse should happen after (rate) ticks */
