@@ -14,11 +14,18 @@ properties:
     pattern: "^lcd-controller@[0-9a-f]+$"
 
   compatible:
-    enum:
-      - ingenic,jz4740-lcd
-      - ingenic,jz4725b-lcd
-      - ingenic,jz4770-lcd
-      - ingenic,jz4780-lcd
+    oneOf:
+      - enum:
+        - ingenic,jz4740-lcd
+        - ingenic,jz4725b-lcd
+        - ingenic,jz4760-lcd
+        - ingenic,jz4780-lcd
+      - items:
+        - enum:
+          - ingenic,jz4760b-lcd
+          - ingenic,jz4770-lcd
+        - const: ingenic,jz4760-lcd
+
 
   reg:
     maxItems: 1
