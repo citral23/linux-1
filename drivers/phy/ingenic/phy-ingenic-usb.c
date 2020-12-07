@@ -363,6 +363,7 @@ static int ingenic_usb_phy_probe(struct platform_device *pdev)
 }
 
 static const struct of_device_id ingenic_usb_phy_of_matches[] = {
+	{ .compatible = "ingenic,jz4760-phy", .data = &jz4770_soc_info },
 	{ .compatible = "ingenic,jz4770-phy", .data = &jz4770_soc_info },
 	{ .compatible = "ingenic,jz4775-phy", .data = &jz4775_soc_info },
 	{ .compatible = "ingenic,jz4780-phy", .data = &jz4780_soc_info },
