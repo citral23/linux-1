@@ -363,12 +363,30 @@ static int ingenic_usb_phy_probe(struct platform_device *pdev)
 }
 
 static const struct of_device_id ingenic_usb_phy_of_matches[] = {
-	{ .compatible = "ingenic,jz4770-phy", .data = &jz4770_soc_info },
-	{ .compatible = "ingenic,jz4775-phy", .data = &jz4775_soc_info },
-	{ .compatible = "ingenic,jz4780-phy", .data = &jz4780_soc_info },
-	{ .compatible = "ingenic,x1000-phy", .data = &x1000_soc_info },
-	{ .compatible = "ingenic,x1830-phy", .data = &x1830_soc_info },
-	{ .compatible = "ingenic,x2000-phy", .data = &x2000_soc_info },
+	{
+		.compatible = "ingenic,jz4770-phy",
+		.data = IF_ENABLED(CONFIG_MACH_JZ4770, &jz4770_soc_info),
+	},
+	{
+		.compatible = "ingenic,jz4775-phy",
+		.data = IF_ENABLED(CONFIG_MACH_JZ4775, &jz4775_soc_info),
+	},
+	{
+		.compatible = "ingenic,jz4780-phy",
+		.data = IF_ENABLED(CONFIG_MACH_JZ4780, &jz4780_soc_info),
+	},
+	{
+		.compatible = "ingenic,x1000-phy",
+		.data = IF_ENABLED(CONFIG_MACH_X1000, &x1000_soc_info),
+	},
+	{
+		.compatible = "ingenic,x1830-phy",
+		.data = IF_ENABLED(CONFIG_MACH_X1830, &x1830_soc_info),
+	},
+	{
+		.compatible = "ingenic,x2000-phy",
+		.data = IF_ENABLED(CONFIG_MACH_X2000, &x2000_soc_info),
+	},
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, ingenic_usb_phy_of_matches);
