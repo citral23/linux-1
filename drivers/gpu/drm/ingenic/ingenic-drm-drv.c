@@ -870,6 +870,17 @@ static void __maybe_unused ingenic_drm_release_rmem(void *d)
 	of_reserved_mem_device_release(d);
 }
 
+static struct clk * ingenic_drm_get_parent_clk(struct clk *clk)
+{
+	/*
+	 * Return the first clock above the one that will effectively modify
+	 * its rate when clk_set_rate(clk) is called.
+	 */
+	clk = clk_get_first_to_set_rate(clk);
+
+	return clk_get_parent(clk);
+}
+
 static int ingenic_drm_bind(struct device *dev, bool has_components)
 {
 	struct platform_device *pdev = to_platform_device(dev);
@@ -1149,7 +1160,8 @@ static int ingenic_drm_bind(struct device *dev, bool has_components)
 	mutex_init(&priv->clk_mutex);
 	priv->clock_nb.notifier_call = ingenic_drm_update_pixclk;
 
-	parent_clk = clk_get_parent(priv->pix_clk);
+	parent_clk = ingenic_drm_get_parent_clk(priv->pix_clk);
+
 	ret = clk_notifier_register(parent_clk, &priv->clock_nb);
 	if (ret) {
 		dev_err(dev, "Unable to register clock notifier\n");
@@ -1189,7 +1201,7 @@ static int compare_of(struct device *dev, void *data)
 static void ingenic_drm_unbind(struct device *dev)
 {
 	struct ingenic_drm *priv = dev_get_drvdata(dev);
-	struct clk *parent_clk = clk_get_parent(priv->pix_clk);
+	struct clk *parent_clk = ingenic_drm_get_parent_clk(priv->pix_clk);
 
 	clk_notifier_unregister(parent_clk, &priv->clock_nb);
 	if (priv->lcd_clk)
