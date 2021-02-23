@@ -77,7 +77,7 @@ struct ingenic_drm {
 
 	struct device *dev;
 	struct regmap *map;
-	struct clk *lcd_clk, *pix_clk;
+	struct clk *lcd_clk, *pix_clk, *dma_clk;
 	const struct jz_soc_info *soc_info;
 
 	struct ingenic_dma_hwdescs *dma_hwdescs;
@@ -956,6 +956,16 @@ static int ingenic_drm_bind(struct device *dev, bool has_components)
 	if (irq < 0)
 		return irq;
 
+	/*
+	 * DMA clock isn't really optional, but some old Device Tree files
+	 * don't provide it.
+	 */
+	priv->dma_clk = devm_clk_get_optional(dev, "dma");
+	if (IS_ERR(priv->dma_clk)) {
+		dev_err(dev, "Failed to get dma clock\n");
+		return PTR_ERR(priv->dma_clk);
+	}
+
 	if (soc_info->needs_dev_clk) {
 		priv->lcd_clk = devm_clk_get(dev, "lcd");
 		if (IS_ERR(priv->lcd_clk)) {
@@ -1149,6 +1159,14 @@ static int ingenic_drm_bind(struct device *dev, bool has_components)
 		}
 	}
 
+	if (priv->dma_clk) {
+		ret = clk_prepare_enable(priv->dma_clk);
+		if (ret) {
+			dev_err(dev, "Unable to start dma clock\n");
+			goto err_devclk_disable;
+		}
+	}
+
 	/* Set address of our DMA descriptor chain */
 	regmap_write(priv->map, JZ_REG_LCD_DA0, dma_hwdesc_phys_f0);
 	regmap_write(priv->map, JZ_REG_LCD_DA1, dma_hwdesc_phys_f1);
@@ -1165,7 +1183,7 @@ static int ingenic_drm_bind(struct device *dev, bool has_components)
 	ret = clk_notifier_register(parent_clk, &priv->clock_nb);
 	if (ret) {
 		dev_err(dev, "Unable to register clock notifier\n");
-		goto err_devclk_disable;
+		goto err_dmaclk_disable;
 	}
 
 	ret = drm_dev_register(drm, 0);
@@ -1180,6 +1198,9 @@ static int ingenic_drm_bind(struct device *dev, bool has_components)
 
 err_clk_notifier_unregister:
 	clk_notifier_unregister(parent_clk, &priv->clock_nb);
+err_dmaclk_disable:
+	if (priv->dma_clk)
+		clk_disable_unprepare(priv->dma_clk);
 err_devclk_disable:
 	if (priv->lcd_clk)
 		clk_disable_unprepare(priv->lcd_clk);
@@ -1204,6 +1225,8 @@ static void ingenic_drm_unbind(struct device *dev)
 	struct clk *parent_clk = ingenic_drm_get_parent_clk(priv->pix_clk);
 
 	clk_notifier_unregister(parent_clk, &priv->clock_nb);
+	if (priv->dma_clk)
+		clk_disable_unprepare(priv->dma_clk);
 	if (priv->lcd_clk)
 		clk_disable_unprepare(priv->lcd_clk);
 	clk_disable_unprepare(priv->pix_clk);
