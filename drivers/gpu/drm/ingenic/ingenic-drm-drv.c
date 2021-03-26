@@ -64,11 +64,34 @@ struct jz_soc_info {
 	unsigned int num_formats_f0, num_formats_f1;
 };
 
+struct ingenic_gem_object {
+	struct drm_gem_cma_object base;
+	struct ingenic_dma_hwdesc *hwdescs;
+	dma_addr_t hwdescs_phys;
+};
+
 struct ingenic_drm_private_state {
 	struct drm_private_state base;
 
 	bool no_vblank;
 	bool use_palette;
+
+	/*
+	 * A lot of devices with an Ingenic SoC have a weird LCD panel attached,
+	 * where the pixels are not square. For instance, the AUO A030JTN01 and
+	 * Innolux EJ030NA panels have a resolution of 320x480 with a 4:3 aspect
+	 * ratio.
+	 *
+	 * All userspace applications are built with the assumption that the
+	 * pixels are square. To be able to support these devices without too
+	 * much effort, add a doublescan feature, which allows the f0 and f1
+	 * planes to be used with only half of the screen's vertical resolution,
+	 * where each line of the input is displayed twice.
+	 *
+	 * This is done using a chained list of DMA descriptors, one descriptor
+	 * per output line.
+	 */
+	bool doublescan;
 };
 
 struct ingenic_drm {
@@ -177,6 +200,11 @@ static inline struct ingenic_drm *drm_crtc_get_priv(struct drm_crtc *crtc)
 static inline struct ingenic_drm *drm_nb_get_priv(struct notifier_block *nb)
 {
 	return container_of(nb, struct ingenic_drm, clock_nb);
+}
+
+static inline struct ingenic_gem_object *to_ingenic_gem_obj(struct drm_gem_object *gem_obj)
+{
+	return container_of(gem_obj, struct ingenic_gem_object, base.base);
 }
 
 static inline dma_addr_t dma_hwdesc_addr(const struct ingenic_drm *priv, bool use_f1)
@@ -456,7 +484,7 @@ static int ingenic_drm_plane_atomic_check(struct drm_plane *plane,
 		return PTR_ERR(priv_state);
 
 	ret = drm_atomic_helper_check_plane_state(new_plane_state, crtc_state,
-						  DRM_PLANE_HELPER_NO_SCALING,
+						  0x8000,
 						  DRM_PLANE_HELPER_NO_SCALING,
 						  priv->soc_info->has_osd,
 						  true);
@@ -471,6 +499,17 @@ static int ingenic_drm_plane_atomic_check(struct drm_plane *plane,
 	    (new_plane_state->src_x != 0 ||
 	     (new_plane_state->src_w >> 16) != new_plane_state->crtc_w ||
 	     (new_plane_state->src_h >> 16) != new_plane_state->crtc_h))
+		return -EINVAL;
+
+	/* Enable doublescan if the CRTC_H is twice the SRC_H. */
+	priv_state->doublescan = (new_plane_state->src_h >> 16) * 2 == new_plane_state->crtc_h;
+
+	/* Otherwise, fail if CRTC_H != SRC_H */
+	if (!priv_state->doublescan && (new_plane_state->src_h >> 16) != new_plane_state->crtc_h)
+		return -EINVAL;
+
+	/* Fail if CRTC_W != SRC_W */
+	if ((new_plane_state->src_w >> 16) != new_plane_state->crtc_w)
 		return -EINVAL;
 
 	priv_state->use_palette = new_plane_state->fb &&
@@ -638,7 +677,9 @@ static void ingenic_drm_plane_atomic_update(struct drm_plane *plane,
 	struct ingenic_drm_private_state *priv_state;
 	struct drm_crtc_state *crtc_state;
 	struct ingenic_dma_hwdesc *hwdesc;
-	unsigned int width, height, cpp;
+	unsigned int width, height, cpp, i;
+	struct drm_gem_object *gem_obj;
+	struct ingenic_gem_object *obj;
 	dma_addr_t addr, next_addr;
 	bool use_f1;
 	u32 fourcc;
@@ -655,17 +696,39 @@ static void ingenic_drm_plane_atomic_update(struct drm_plane *plane,
 		height = newstate->src_h >> 16;
 		cpp = newstate->fb->format->cpp[0];
 
+		gem_obj = drm_gem_fb_get_obj(newstate->fb, 0);
+		obj = to_ingenic_gem_obj(gem_obj);
+
 		priv_state = ingenic_drm_get_new_priv_state(priv, state);
 		if (priv_state && priv_state->use_palette)
 			next_addr = dma_hwdesc_pal_addr(priv);
 		else
 			next_addr = dma_hwdesc_addr(priv, use_f1);
 
-		hwdesc = &priv->dma_hwdescs->hwdesc[use_f1];
+		if (priv_state->doublescan) {
+			hwdesc = &obj->hwdescs[0];
+			/*
+			 * Use one DMA descriptor per output line, and display
+			 * each input line twice.
+			 */
+			for (i = 0; i < newstate->crtc_h; i++) {
+				hwdesc[i].next = obj->hwdescs_phys
+					+ (i + 1) * sizeof(*hwdesc);
+				hwdesc[i].addr = addr + (i / 2) * newstate->fb->pitches[0];
+				hwdesc[i].cmd = newstate->fb->pitches[0] / 4;
+			}
 
-		hwdesc->addr = addr;
-		hwdesc->cmd = JZ_LCD_CMD_EOF_IRQ | (width * height * cpp / 4);
-		hwdesc->next = next_addr;
+			/* We want the EOF IRQ only on the very last transfer */
+			hwdesc[newstate->crtc_h - 1].cmd |= JZ_LCD_CMD_EOF_IRQ;
+			hwdesc[newstate->crtc_h - 1].next = next_addr;
+			priv->dma_hwdescs->hwdesc[use_f1] = *hwdesc;
+		} else {
+			/* Use one DMA descriptor for the whole frame. */
+			hwdesc = &priv->dma_hwdescs->hwdesc[use_f1];
+			hwdesc->addr = addr;
+			hwdesc->cmd = JZ_LCD_CMD_EOF_IRQ | (width * height * cpp / 4);
+			hwdesc->next = next_addr;
+		}
 
 		if (drm_atomic_crtc_needs_modeset(crtc_state)) {
 			fourcc = newstate->fb->format->format;
@@ -837,16 +900,57 @@ static void ingenic_drm_disable_vblank(struct drm_crtc *crtc)
 	regmap_update_bits(priv->map, JZ_REG_LCD_CTRL, JZ_LCD_CTRL_EOF_IRQ, 0);
 }
 
+static void ingenic_drm_gem_fb_destroy(struct drm_framebuffer *fb)
+{
+	struct ingenic_drm *priv = drm_device_get_priv(fb->dev);
+	struct drm_gem_object *gem_obj = drm_gem_fb_get_obj(fb, 0);
+	struct ingenic_gem_object *obj = to_ingenic_gem_obj(gem_obj);
+
+	dma_free_coherent(priv->dev,
+			  sizeof(*obj->hwdescs) * fb->height,
+			  obj->hwdescs, obj->hwdescs_phys);
+	drm_gem_fb_destroy(fb);
+}
+
+static const struct drm_framebuffer_funcs ingenic_drm_gem_fb_funcs = {
+	.destroy	= ingenic_drm_gem_fb_destroy,
+	.create_handle	= drm_gem_fb_create_handle,
+};
+
 static struct drm_framebuffer *
 ingenic_drm_gem_fb_create(struct drm_device *drm, struct drm_file *file,
 			  const struct drm_mode_fb_cmd2 *mode_cmd)
 {
 	struct ingenic_drm *priv = drm_device_get_priv(drm);
+	struct drm_gem_object *gem_obj;
+	struct ingenic_gem_object *obj;
+	struct drm_framebuffer *fb;
 
+	/* TODO: use ingenic_drm_gem_fb_funcs */
 	if (priv->soc_info->map_noncoherent)
-		return drm_gem_fb_create_with_dirty(drm, file, mode_cmd);
+		fb = drm_gem_fb_create_with_dirty(drm, file, mode_cmd);
+	else
+		fb = drm_gem_fb_create(drm, file, mode_cmd);
+	if (IS_ERR(fb))
+		return fb;
 
-	return drm_gem_fb_create(drm, file, mode_cmd);
+	gem_obj = drm_gem_fb_get_obj(fb, 0);
+	obj = to_ingenic_gem_obj(gem_obj);
+
+	/*
+	 * Create (fb->height * 2) DMA descriptors, in case we want to use the
+	 * doublescan feature.
+	 */
+	obj->hwdescs = dma_alloc_coherent(priv->dev,
+					  sizeof(*obj->hwdescs) * fb->height * 2,
+					  &obj->hwdescs_phys,
+					  GFP_KERNEL);
+	if (!obj->hwdescs) {
+		drm_gem_fb_destroy(fb);
+		return ERR_PTR(-ENOMEM);
+	}
+
+	return fb;
 }
 
 static struct drm_gem_object *
@@ -900,6 +1004,8 @@ static const struct drm_driver ingenic_drm_driver_data = {
 	.fops			= &ingenic_drm_fops,
 	.gem_create_object	= ingenic_drm_gem_create_object,
 	DRM_GEM_CMA_DRIVER_OPS,
+
+	.gem_create_object	= ingenic_drm_gem_create_object,
 
 	.irq_handler		= ingenic_drm_irq_handler,
 };
