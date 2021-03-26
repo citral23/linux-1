@@ -1,54 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0
 /dts-v1/;
 
-#include "jz4725b.dtsi"
-
-#include <dt-bindings/gpio/gpio.h>
-#include <dt-bindings/iio/adc/ingenic,adc.h>
-#include <dt-bindings/input/linux-event-codes.h>
+#include "bits/rs90-base.dtsi"
 
 / {
 	compatible = "ylm,rs90", "ingenic,jz4725b";
 	model = "RS-90";
-
-	memory {
-		device_type = "memory";
-		reg = <0x0 0x2000000>;
-	};
-
-	reserved-memory {
-		#address-cells = <1>;
-		#size-cells = <1>;
-		ranges;
-
-		vmem: video-memory@1f00000 {
-			compatible = "shared-dma-pool";
-			reg = <0x1f00000 0x100000>;
-			reusable;
-		};
-	};
-
-	vcc: regulator {
-		compatible = "regulator-fixed";
-
-		regulator-name = "vcc";
-		regulaor-min-microvolt = <3300000>;
-		regulaor-max-microvolt = <3300000>;
-		regulator-always-on;
-	};
-
-	backlight: backlight {
-		compatible = "pwm-backlight";
-		pwms = <&pwm 3 40000 0>;
-
-		brightness-levels = <0 16 32 48 64 80 112 144 192 255>;
-		default-brightness-level = <8>;
-
-		pinctrl-names = "default";
-		pinctrl-0 = <&pins_pwm3>;
-
-		power-supply = <&vcc>;
-	};
 
 	keys@0 {
 		compatible = "gpio-keys";
@@ -123,56 +80,6 @@
 		};
 	};
 
-	amp: analog-amplifier {
-		compatible = "simple-audio-amplifier";
-		enable-gpios = <&gpc 15 GPIO_ACTIVE_HIGH>;
-
-		VCC-supply = <&vcc>;
-	};
-
-	sound {
-		compatible = "simple-audio-card";
-
-		simple-audio-card,name = "rs90-audio";
-		simple-audio-card,format = "i2s";
-
-		simple-audio-card,widgets =
-			"Speaker", "Speaker",
-			"Headphone", "Headphones";
-		simple-audio-card,routing =
-			"INL", "LHPOUT",
-			"INR", "RHPOUT",
-			"Headphones", "LHPOUT",
-			"Headphones", "RHPOUT",
-			"Speaker", "OUTL",
-			"Speaker", "OUTR";
-		simple-audio-card,pin-switches = "Speaker";
-
-		simple-audio-card,hp-det-gpio = <&gpd 16 GPIO_ACTIVE_LOW>;
-		simple-audio-card,aux-devs = <&amp>;
-
-		simple-audio-card,bitclock-master = <&dai_codec>;
-		simple-audio-card,frame-master = <&dai_codec>;
-
-		dai_cpu: simple-audio-card,cpu {
-			sound-dai = <&aic>;
-		};
-
-		dai_codec: simple-audio-card,codec {
-			sound-dai = <&codec>;
-		};
-
-	};
-
-	usb_phy: usb-phy {
-		compatible = "usb-nop-xceiv";
-		#phy-cells = <0>;
-
-		clocks = <&cgu JZ4725B_CLK_UDC_PHY>;
-		clock-names = "main_clk";
-		vcc-supply = <&vcc>;
-	};
-
 	panel {
 		compatible = "sharp,ls020b1dd01d";
 
@@ -185,188 +92,16 @@
 			};
 		};
 	};
-
-	battery: battery {
-		compatible = "simple-battery";
-		voltage-min-design-microvolt = <3692000>;
-		voltage-max-design-microvolt = <3900000>;
-		charge-full-design-microamp-hours = <1020000>;
-	};
-
-	resistor: resistor {
-		compatible = "voltage-divider";
-		#io-channel-cells = <0>;
-
-		output-ohms = <1125>;
-		full-ohms = <3900>;
-
-		io-channels = <&adc INGENIC_ADC_BATTERY>;
-	};
-
-	pmu {
-		compatible = "ingenic,jz4725b-battery", "ingenic,jz4740-battery";
-		io-channels = <&resistor>;
-		io-channel-names = "battery";
-		monitored-battery = <&battery>;
-	};
-
-	cpu_opp_table: opp-table {
-		compatible = "operating-points-v2";
-
-		opp-216000000 { opp-hz = /bits/ 64 <216000000>; };
-		opp-300000000 { opp-hz = /bits/ 64 <300000000>; };
-		opp-336000000 { opp-hz = /bits/ 64 <336000000>; };
-		opp-360000000 { opp-hz = /bits/ 64 <360000000>; };
-		opp-378000000 { opp-hz = /bits/ 64 <378000000>; };
-		opp-396000000 { opp-hz = /bits/ 64 <396000000>; };
-		opp-420000000 { opp-hz = /bits/ 64 <420000000>; };
-		opp-438000000 { opp-hz = /bits/ 64 <438000000>; };
-		opp-456000000 { opp-hz = /bits/ 64 <456000000>; };
-	};
 };
 
-&ext {
-	clock-frequency = <12000000>;
+&pins_lcd {
+	groups = "lcd-8bit", "lcd-16bit", "lcd-special";
 };
 
-&rtc_dev {
-	system-power-controller;
-};
-
-&udc {
-	phys = <&usb_phy>;
-};
-
-&pinctrl {
-	pins_mmc1: mmc1 {
-		function = "mmc1";
-		groups = "mmc1-1bit";
-	};
-
-	pins_nemc: nemc {
-		function = "nand";
-		groups = "nand-cs1", "nand-cle-ale", "nand-fre-fwe";
-	};
-
-	pins_pwm3: pwm3 {
-		function = "pwm3";
-		groups = "pwm3";
-		bias-disable;
-	};
-
-	pins_lcd: lcd {
-		function = "lcd";
-		groups = "lcd-8bit", "lcd-16bit", "lcd-special";
-	};
-};
-
-&mmc0 {
-	status = "disabled";
+&pins_mmc1_cd {
+	pins = "PC20";
 };
 
 &mmc1 {
-	bus-width = <1>;
-	max-frequency = <48000000>;
-
-	pinctrl-names = "default";
-	pinctrl-0 = <&pins_mmc1>;
-
 	cd-gpios = <&gpc 20 GPIO_ACTIVE_LOW>;
-};
-
-&uart {
-	/*
-	 * The pins for RX/TX are used for the right shoulder button and
-	 * backlight PWM.
-	 */
-	status = "disabled";
-};
-
-&nemc {
-	nandc: nand-controller@1 {
-		compatible = "ingenic,jz4725b-nand";
-		reg = <1 0 0x4000000>;
-
-		#address-cells = <1>;
-		#size-cells = <0>;
-
-		ecc-engine = <&bch>;
-
-		ingenic,nemc-tAS = <10>;
-		ingenic,nemc-tAH = <5>;
-		ingenic,nemc-tBP = <10>;
-		ingenic,nemc-tAW = <15>;
-		ingenic,nemc-tSTRV = <100>;
-
-		pinctrl-names = "default";
-		pinctrl-0 = <&pins_nemc>;
-
-		rb-gpios = <&gpc 27 GPIO_ACTIVE_HIGH>;
-
-		nand@1 {
-			reg = <1>;
-
-			nand-ecc-step-size = <512>;
-			nand-ecc-strength = <8>;
-			nand-ecc-mode = "hw";
-			nand-is-boot-medium;
-			nand-on-flash-bbt;
-
-			partitions {
-				compatible = "fixed-partitions";
-				#address-cells = <1>;
-				#size-cells = <1>;
-
-				partition@0 {
-					label = "bootloader";
-					reg = <0x0 0x20000>;
-				};
-
-				partition@20000 {
-					label = "system";
-					reg = <0x20000 0x0>;
-				};
-			};
-		};
-	};
-};
-
-&cgu {
-	/* Use 32kHz oscillator as the parent of the RTC clock */
-	assigned-clocks = <&cgu JZ4725B_CLK_RTC>;
-	assigned-clock-parents = <&cgu JZ4725B_CLK_OSC32K>;
-};
-
-&tcu {
-	/*
-	 * 750 kHz for the system timer and clocksource, and use RTC as the
-	 * parent for the watchdog clock.
-	 */
-	assigned-clocks = <&tcu TCU_CLK_TIMER0>, <&tcu TCU_CLK_TIMER1>, <&tcu TCU_CLK_WDT>;
-	assigned-clock-parents = <0>, <0>, <&cgu JZ4725B_CLK_RTC>;
-	assigned-clock-rates = <750000>, <750000>;
-};
-
-&lcd {
-	memory-region = <&vmem>;
-
-	pinctrl-names = "default";
-	pinctrl-0 = <&pins_lcd>;
-};
-
-&lcd_ports {
-	port@0 {
-		reg = <0>;
-
-		panel_output: endpoint {
-			remote-endpoint = <&panel_input>;
-		};
-	};
-};
-
-&cpu0 {
-	operating-points-v2 = <&cpu_opp_table>;
-
-	/* We use the main PLL as the CPU clock for the cpufreq driver. */
-	clocks = <&cgu JZ4725B_CLK_PLL>;
 };
