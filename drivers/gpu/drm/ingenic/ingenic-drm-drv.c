@@ -75,6 +75,10 @@ struct jz_soc_info {
 	unsigned int num_formats_f0, num_formats_f1;
 };
 
+struct ingenic_gem_object {
+	struct drm_gem_dma_object base;
+};
+
 struct ingenic_drm_private_state {
 	struct drm_private_state base;
 	bool use_palette;
@@ -897,31 +901,59 @@ static void ingenic_drm_disable_vblank(struct drm_crtc *crtc)
 	regmap_update_bits(priv->map, JZ_REG_LCD_CTRL, JZ_LCD_CTRL_EOF_IRQ, 0);
 }
 
+static void ingenic_drm_gem_fb_destroy(struct drm_framebuffer *fb)
+{
+	drm_gem_fb_destroy(fb);
+}
+
+static int ingenic_drm_gem_dirtyfb(struct drm_framebuffer *fb,
+				   struct drm_file *file_priv, unsigned int flags,
+				   unsigned int color, struct drm_clip_rect *clips,
+				   unsigned int num_clips)
+{
+	struct ingenic_drm *priv = drm_device_get_priv(fb->dev);
+
+	if (priv->soc_info->map_noncoherent) {
+		return drm_atomic_helper_dirtyfb(fb, file_priv, flags, color,
+						 clips, num_clips);
+	}
+
+	return 0;
+}
+
+static const struct drm_framebuffer_funcs ingenic_drm_gem_fb_funcs = {
+	.destroy	= ingenic_drm_gem_fb_destroy,
+	.create_handle	= drm_gem_fb_create_handle,
+	.dirty		= ingenic_drm_gem_dirtyfb,
+};
+
 static struct drm_framebuffer *
-ingenic_drm_gem_fb_create(struct drm_device *drm, struct drm_file *file,
+ingenic_drm_gem_fb_create(struct drm_device *dev, struct drm_file *file,
 			  const struct drm_mode_fb_cmd2 *mode_cmd)
 {
-	struct ingenic_drm *priv = drm_device_get_priv(drm);
+	struct drm_framebuffer *fb;
 
-	if (priv->soc_info->map_noncoherent)
-		return drm_gem_fb_create_with_dirty(drm, file, mode_cmd);
+	fb = drm_gem_fb_create_with_funcs(dev, file, mode_cmd,
+					  &ingenic_drm_gem_fb_funcs);
+	if (IS_ERR(fb))
+		return fb;
 
-	return drm_gem_fb_create(drm, file, mode_cmd);
+	return fb;
 }
 
 static struct drm_gem_object *
 ingenic_drm_gem_create_object(struct drm_device *drm, size_t size)
 {
 	struct ingenic_drm *priv = drm_device_get_priv(drm);
-	struct drm_gem_dma_object *obj;
+	struct ingenic_gem_object *obj;
 
 	obj = kzalloc(sizeof(*obj), GFP_KERNEL);
 	if (!obj)
 		return ERR_PTR(-ENOMEM);
 
-	obj->map_noncoherent = priv->soc_info->map_noncoherent;
+	obj->base.map_noncoherent = priv->soc_info->map_noncoherent;
 
-	return &obj->base;
+	return &obj->base.base;
 }
 
 static struct drm_private_state *
