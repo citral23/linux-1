@@ -68,6 +68,7 @@ struct ingenic_drm_private_state {
 	struct drm_private_state base;
 
 	bool no_vblank;
+	bool use_palette;
 };
 
 struct ingenic_drm {
@@ -185,6 +186,13 @@ static inline dma_addr_t dma_hwdesc_addr(const struct ingenic_drm *priv, bool us
 	return priv->dma_hwdescs_phys + offset;
 }
 
+static inline dma_addr_t dma_hwdesc_pal_addr(const struct ingenic_drm *priv)
+{
+	u32 offset = offsetof(struct ingenic_dma_hwdescs, hwdesc_pal);
+
+	return priv->dma_hwdescs_phys + offset;
+}
+
 static int ingenic_drm_update_pixclk(struct notifier_block *nb,
 				     unsigned long action,
 				     void *data)
@@ -207,11 +215,19 @@ static void ingenic_drm_crtc_atomic_enable(struct drm_crtc *crtc,
 					   struct drm_atomic_state *state)
 {
 	struct ingenic_drm *priv = drm_crtc_get_priv(crtc);
+	struct ingenic_drm_private_state *priv_state;
+
+	priv_state = ingenic_drm_get_new_priv_state(priv, state);
+	if (WARN_ON(!priv_state))
+		return;
 
 	regmap_write(priv->map, JZ_REG_LCD_STATE, 0);
 
 	/* Set address of our DMA descriptor chain */
-	regmap_write(priv->map, JZ_REG_LCD_DA0, dma_hwdesc_addr(priv, 0));
+	if (priv_state->use_palette)
+		regmap_write(priv->map, JZ_REG_LCD_DA0, dma_hwdesc_pal_addr(priv));
+	else
+		regmap_write(priv->map, JZ_REG_LCD_DA0, dma_hwdesc_addr(priv, 0));
 	regmap_write(priv->map, JZ_REG_LCD_DA1, dma_hwdesc_addr(priv, 1));
 
 	regmap_update_bits(priv->map, JZ_REG_LCD_CTRL,
@@ -422,6 +438,7 @@ static int ingenic_drm_plane_atomic_check(struct drm_plane *plane,
 	struct drm_plane_state *new_plane_state = drm_atomic_get_new_plane_state(state,
 										 plane);
 	struct ingenic_drm *priv = drm_device_get_priv(plane->dev);
+	struct ingenic_drm_private_state *priv_state;
 	struct drm_crtc_state *crtc_state;
 	struct drm_crtc *crtc = new_plane_state->crtc ?: old_plane_state->crtc;
 	int ret;
@@ -433,6 +450,10 @@ static int ingenic_drm_plane_atomic_check(struct drm_plane *plane,
 							crtc);
 	if (WARN_ON(!crtc_state))
 		return -EINVAL;
+
+	priv_state = ingenic_drm_get_priv_state(priv, state);
+	if (IS_ERR(priv_state))
+		return PTR_ERR(priv_state);
 
 	ret = drm_atomic_helper_check_plane_state(new_plane_state, crtc_state,
 						  DRM_PLANE_HELPER_NO_SCALING,
@@ -451,6 +472,9 @@ static int ingenic_drm_plane_atomic_check(struct drm_plane *plane,
 	     (new_plane_state->src_w >> 16) != new_plane_state->crtc_w ||
 	     (new_plane_state->src_h >> 16) != new_plane_state->crtc_h))
 		return -EINVAL;
+
+	priv_state->use_palette = new_plane_state->fb &&
+		new_plane_state->fb->format->format == DRM_FORMAT_C8;
 
 	/*
 	 * Require full modeset if enabling or disabling a plane, or changing
@@ -611,10 +635,11 @@ static void ingenic_drm_plane_atomic_update(struct drm_plane *plane,
 	struct ingenic_drm *priv = drm_device_get_priv(plane->dev);
 	struct drm_plane_state *newstate = drm_atomic_get_new_plane_state(state, plane);
 	struct drm_plane_state *oldstate = drm_atomic_get_old_plane_state(state, plane);
+	struct ingenic_drm_private_state *priv_state;
 	struct drm_crtc_state *crtc_state;
 	struct ingenic_dma_hwdesc *hwdesc;
-	unsigned int width, height, cpp, offset;
-	dma_addr_t addr;
+	unsigned int width, height, cpp;
+	dma_addr_t addr, next_addr;
 	bool use_f1;
 	u32 fourcc;
 
@@ -630,22 +655,22 @@ static void ingenic_drm_plane_atomic_update(struct drm_plane *plane,
 		height = newstate->src_h >> 16;
 		cpp = newstate->fb->format->cpp[0];
 
+		priv_state = ingenic_drm_get_new_priv_state(priv, state);
+		if (priv_state && priv_state->use_palette)
+			next_addr = dma_hwdesc_pal_addr(priv);
+		else
+			next_addr = dma_hwdesc_addr(priv, use_f1);
+
 		hwdesc = &priv->dma_hwdescs->hwdesc[use_f1];
 
 		hwdesc->addr = addr;
 		hwdesc->cmd = JZ_LCD_CMD_EOF_IRQ | (width * height * cpp / 4);
+		hwdesc->next = next_addr;
 
 		if (drm_atomic_crtc_needs_modeset(crtc_state)) {
 			fourcc = newstate->fb->format->format;
 
 			ingenic_drm_plane_config(priv->dev, plane, fourcc);
-
-			if (fourcc == DRM_FORMAT_C8)
-				offset = offsetof(struct ingenic_dma_hwdescs, hwdesc_pal);
-			else
-				offset = offsetof(struct ingenic_dma_hwdescs, hwdesc[0]);
-
-			priv->dma_hwdescs->hwdesc[0].next = priv->dma_hwdescs_phys + offset;
 
 			crtc_state->color_mgmt_changed = fourcc == DRM_FORMAT_C8;
 		}
