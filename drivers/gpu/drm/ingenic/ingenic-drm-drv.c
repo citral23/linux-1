@@ -66,6 +66,8 @@ struct jz_soc_info {
 
 struct ingenic_drm_private_state {
 	struct drm_private_state base;
+
+	bool no_vblank;
 };
 
 struct ingenic_drm {
@@ -87,7 +89,6 @@ struct ingenic_drm {
 	dma_addr_t dma_hwdescs_phys;
 
 	bool panel_is_sharp;
-	bool no_vblank;
 
 	/*
 	 * clk_mutex is used to synchronize the pixel clock rate update with
@@ -111,6 +112,30 @@ static inline struct ingenic_drm_private_state *
 to_ingenic_drm_priv_state(struct drm_private_state *state)
 {
 	return container_of(state, struct ingenic_drm_private_state, base);
+}
+
+static struct ingenic_drm_private_state *
+ingenic_drm_get_priv_state(struct ingenic_drm *priv, struct drm_atomic_state *state)
+{
+	struct drm_private_state *priv_state;
+
+	priv_state = drm_atomic_get_private_obj_state(state, &priv->private_obj);
+	if (IS_ERR(priv_state))
+		return ERR_CAST(priv_state);
+
+	return to_ingenic_drm_priv_state(priv_state);
+}
+
+static struct ingenic_drm_private_state *
+ingenic_drm_get_new_priv_state(struct ingenic_drm *priv, struct drm_atomic_state *state)
+{
+	struct drm_private_state *priv_state;
+
+	priv_state = drm_atomic_get_new_private_obj_state(state, &priv->private_obj);
+	if (!priv_state)
+		return NULL;
+
+	return to_ingenic_drm_priv_state(priv_state);
 }
 
 static bool ingenic_drm_writeable_reg(struct device *dev, unsigned int reg)
@@ -268,6 +293,7 @@ static int ingenic_drm_crtc_atomic_check(struct drm_crtc *crtc,
 									  crtc);
 	struct ingenic_drm *priv = drm_crtc_get_priv(crtc);
 	struct drm_plane_state *f1_state, *f0_state, *ipu_state = NULL;
+	struct ingenic_drm_private_state *priv_state;
 
 	if (crtc_state->gamma_lut &&
 	    drm_color_lut_size(crtc_state->gamma_lut) != ARRAY_SIZE(priv->dma_hwdescs->palette)) {
@@ -299,9 +325,13 @@ static int ingenic_drm_crtc_atomic_check(struct drm_crtc *crtc,
 			}
 		}
 
+		priv_state = ingenic_drm_get_priv_state(priv, state);
+		if (IS_ERR(priv_state))
+			return PTR_ERR(priv_state);
+
 		/* If all the planes are disabled, we won't get a VBLANK IRQ */
-		priv->no_vblank = !f1_state->fb && !f0_state->fb &&
-				  !(ipu_state && ipu_state->fb);
+		priv_state->no_vblank = !f1_state->fb && !f0_state->fb &&
+					!(ipu_state && ipu_state->fb);
 	}
 
 	return 0;
@@ -727,6 +757,7 @@ static void ingenic_drm_atomic_helper_commit_tail(struct drm_atomic_state *old_s
 	 */
 	struct drm_device *dev = old_state->dev;
 	struct ingenic_drm *priv = drm_device_get_priv(dev);
+	struct ingenic_drm_private_state *priv_state;
 
 	drm_atomic_helper_commit_modeset_disables(dev, old_state);
 
@@ -736,7 +767,9 @@ static void ingenic_drm_atomic_helper_commit_tail(struct drm_atomic_state *old_s
 
 	drm_atomic_helper_commit_hw_done(old_state);
 
-	if (!priv->no_vblank)
+	priv_state = ingenic_drm_get_new_priv_state(priv, old_state);
+
+	if (!priv_state || !priv_state->no_vblank)
 		drm_atomic_helper_wait_for_vblanks(dev, old_state);
 
 	drm_atomic_helper_cleanup_planes(dev, old_state);
