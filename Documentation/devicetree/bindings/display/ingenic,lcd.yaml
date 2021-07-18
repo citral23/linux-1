@@ -14,11 +14,18 @@ properties:
     pattern: "^lcd-controller@[0-9a-f]+$"
 
   compatible:
-    enum:
-      - ingenic,jz4740-lcd
-      - ingenic,jz4725b-lcd
-      - ingenic,jz4770-lcd
-      - ingenic,jz4780-lcd
+    oneOf:
+      - enum:
+        - ingenic,jz4740-lcd
+        - ingenic,jz4725b-lcd
+        - ingenic,jz4760-lcd
+        - ingenic,jz4780-lcd
+      - items:
+        - enum:
+          - ingenic,jz4760b-lcd
+          - ingenic,jz4770-lcd
+        - const: ingenic,jz4760-lcd
+
 
   reg:
     maxItems: 1
@@ -35,8 +42,9 @@ properties:
   clock-names:
     items:
       - const: lcd_pclk
+      - const: dma
       - const: lcd
-    minItems: 1
+    minItems: 2
 
   port:
     $ref: /schemas/graph.yaml#/properties/port
@@ -74,15 +82,15 @@ if:
 then:
   properties:
     clocks:
-      minItems: 2
+      minItems: 3
     clock-names:
-      minItems: 2
+      minItems: 3
 else:
   properties:
     clocks:
-      maxItems: 1
+      maxItems: 2
     clock-names:
-      maxItems: 1
+      maxItems: 2
 
 additionalProperties: false
 
@@ -96,8 +104,9 @@ examples:
       interrupt-parent = <&intc>;
       interrupts = <30>;
 
-      clocks = <&cgu JZ4740_CLK_LCD_PCLK>, <&cgu JZ4740_CLK_LCD>;
-      clock-names = "lcd_pclk", "lcd";
+      clocks = <&cgu JZ4740_CLK_LCD_PCLK>, <&cgu JZ4740_CLK_LCD>,
+               <&cgu JZ4740_CLK_DMA>;
+      clock-names = "lcd_pclk", "lcd", "dma";
 
       port {
         endpoint {
