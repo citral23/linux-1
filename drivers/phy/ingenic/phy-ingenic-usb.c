@@ -362,6 +362,8 @@ static int ingenic_usb_phy_probe(struct platform_device *pdev)
 	return PTR_ERR_OR_ZERO(provider);
 }
 
+#define IF_ENABLED(cfg, ptr) PTR_IF(IS_ENABLED(cfg), ptr)
+
 static const struct of_device_id ingenic_usb_phy_of_matches[] = {
 	{
 		.compatible = "ingenic,jz4760-phy",
