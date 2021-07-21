@@ -221,7 +221,7 @@
 		};
 	};
 
-	spi {
+	spi: spi {
 		compatible = "spi-gpio";
 		#address-cells = <1>;
 		#size-cells = <0>;
@@ -380,7 +380,7 @@
 			groups = "otg-vbus";
 		};
 
-		vbus-pin {
+		vbus_pin: vbus-pin {
 			pins = "PD7";
 			bias-disable;
 		};
