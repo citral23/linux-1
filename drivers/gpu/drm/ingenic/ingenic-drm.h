@@ -45,6 +45,12 @@
 #define JZ_REG_LCD_SIZE0			0x128
 #define JZ_REG_LCD_SIZE1			0x12c
 
+#define JZ_REG_LCD_SLCD_MCFG			0xA0
+#define JZ_REG_LCD_SLCD_MCTRL			0xA4
+#define JZ_REG_LCD_SLCD_MSTATE			0xA8
+#define JZ_REG_LCD_SLCD_MDATA			0xAC
+#define JZ_REG_LCD_SLCD_MFIFO			0xB0
+
 #define JZ_LCD_CFG_SLCD				BIT(31)
 #define JZ_LCD_CFG_PS_DISABLE			BIT(23)
 #define JZ_LCD_CFG_CLS_DISABLE			BIT(22)
@@ -139,6 +145,17 @@
 #define JZ_LCD_STATE_SOF_IRQ			BIT(4)
 #define JZ_LCD_STATE_DISABLED			BIT(0)
 
+#define JZ_SLCD_MCFG_DWIDTH_OFFSET		10
+#define JZ_SLCD_MCFG_DWIDTH_16BIT		(1 << JZ_SLCD_MCFG_DWIDTH_OFFSET)
+#define JZ_SLCD_MCFG_DWIDTH_8BIT		(4 << JZ_SLCD_MCFG_DWIDTH_OFFSET)
+#define JZ_SLCD_MCFG_CWIDTH_OFFSET		8
+#define JZ_SLCD_MCFG_CWIDTH_16BIT		(0 << JZ_SLCD_MCFG_CWIDTH_OFFSET)
+#define JZ_SLCD_MCFG_CWIDTH_8BIT		(1 << JZ_SLCD_MCFG_CWIDTH_OFFSET)
+#define JZ_SLCD_MCFG_TYPE_SERIAL		BIT(0)
+#define JZ_SLCD_MCTRL_DMATXEN			BIT(0)
+#define JZ_SLCD_MSTATE_BUSY			BIT(0)
+#define JZ_SLCD_MDATA_COMMAND			BIT(31)
+
 #define JZ_LCD_RGBC_ODD_RGB			(0x0 << 4)
 #define JZ_LCD_RGBC_ODD_RBG			(0x1 << 4)
 #define JZ_LCD_RGBC_ODD_GRB			(0x2 << 4)
@@ -177,9 +194,23 @@
 #define JZ_LCD_SIZE01_HEIGHT_LSB		16
 
 struct device;
+struct mipi_dsi_host;
 struct drm_plane;
 struct drm_plane_state;
 struct platform_driver;
+
+struct mipi_dsi_host;
+
+#ifdef CONFIG_DRM_INGENIC_SLCD
+int devm_ingenic_drm_init_dsi(struct device *dev,
+			      struct mipi_dsi_host *dsi_host);
+#else
+static inline int devm_ingenic_drm_init_dsi(struct device *dev,
+					    struct mipi_dsi_host *dsi_host)
+{
+	return 0;
+}
+#endif
 
 void ingenic_drm_plane_config(struct device *dev,
 			      struct drm_plane *plane, u32 fourcc);

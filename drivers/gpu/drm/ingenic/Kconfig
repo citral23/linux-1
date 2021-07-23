@@ -25,4 +25,12 @@ config DRM_INGENIC_IPU
 
 	  The Image Processing Unit (IPU) will appear as a second primary plane.
 
+config DRM_INGENIC_SLCD
+        bool "Support DSI panels"
+        select DRM_MIPI_DSI
+        help
+          Choose this option to support MIPI DSI panels.
+          
+          When in doubt, say Y.
+
 endif

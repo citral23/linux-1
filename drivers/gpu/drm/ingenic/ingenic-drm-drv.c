@@ -8,6 +8,7 @@
 
 #include <linux/component.h>
 #include <linux/clk.h>
+#include <linux/dmaengine.h>
 #include <linux/dma-mapping.h>
 #include <linux/io.h>
 #include <linux/module.h>
@@ -17,6 +18,7 @@
 #include <linux/platform_device.h>
 #include <linux/pm.h>
 #include <linux/regmap.h>
+#include <linux/workqueue.h>
 
 #include <drm/drm_atomic.h>
 #include <drm/drm_atomic_helper.h>
@@ -35,6 +37,7 @@
 #include <drm/drm_gem_atomic_helper.h>
 #include <drm/drm_gem_framebuffer_helper.h>
 #include <drm/drm_irq.h>
+#include <drm/drm_mipi_dsi.h>
 #include <drm/drm_managed.h>
 #include <drm/drm_of.h>
 #include <drm/drm_panel.h>
@@ -108,12 +111,17 @@ struct ingenic_drm {
 	struct device *dev;
 	struct regmap *map;
 	struct clk *lcd_clk, *pix_clk, *dma_clk;
+	struct mipi_dsi_host dsi_host;
+	struct delayed_work refresh_work;
 	const struct jz_soc_info *soc_info;
+
+	struct dma_chan *dma_slcd;
 
 	struct ingenic_dma_hwdescs *dma_hwdescs;
 	dma_addr_t dma_hwdescs_phys;
 
 	bool panel_is_sharp;
+	bool panel_is_slcd;
 
 	/*
 	 * clk_mutex is used to synchronize the pixel clock rate update with
@@ -197,7 +205,7 @@ static const struct regmap_config ingenic_drm_regmap_config = {
 	.val_bits = 32,
 	.reg_stride = 4,
 
-	.max_register = JZ_REG_LCD_SIZE1,
+	.max_register = JZ_REG_LCD_SLCD_MDATA,
 	.writeable_reg = ingenic_drm_writeable_reg,
 };
 
@@ -214,6 +222,11 @@ static inline struct ingenic_drm *drm_crtc_get_priv(struct drm_crtc *crtc)
 static inline struct ingenic_drm *drm_nb_get_priv(struct notifier_block *nb)
 {
 	return container_of(nb, struct ingenic_drm, clock_nb);
+}
+
+static inline struct ingenic_drm *work_struct_get_priv(struct work_struct *work)
+{
+	return container_of(work, struct ingenic_drm, refresh_work.work);
 }
 
 static inline struct ingenic_gem_object *to_ingenic_gem_obj(struct drm_gem_object *gem_obj)
@@ -258,6 +271,8 @@ static void ingenic_drm_crtc_atomic_enable(struct drm_crtc *crtc,
 {
 	struct ingenic_drm *priv = drm_crtc_get_priv(crtc);
 	struct ingenic_drm_private_state *priv_state;
+	unsigned int val;
+	int ret;
 
 	priv_state = ingenic_drm_get_new_priv_state(priv, state);
 	if (WARN_ON(!priv_state))
@@ -265,16 +280,30 @@ static void ingenic_drm_crtc_atomic_enable(struct drm_crtc *crtc,
 
 	regmap_write(priv->map, JZ_REG_LCD_STATE, 0);
 
-	/* Set address of our DMA descriptor chain */
-	if (priv_state->use_palette)
-		regmap_write(priv->map, JZ_REG_LCD_DA0, dma_hwdesc_pal_addr(priv));
-	else
-		regmap_write(priv->map, JZ_REG_LCD_DA0, dma_hwdesc_addr(priv, 0));
-	regmap_write(priv->map, JZ_REG_LCD_DA1, dma_hwdesc_addr(priv, 1));
+	 /* Set address of our DMA descriptor chain */
+        if (priv_state->use_palette)
+                regmap_write(priv->map, JZ_REG_LCD_DA0, dma_hwdesc_pal_addr(priv));
+        else
+                regmap_write(priv->map, JZ_REG_LCD_DA0, dma_hwdesc_addr(priv, 0));
+        regmap_write(priv->map, JZ_REG_LCD_DA1, dma_hwdesc_addr(priv, 1));
 
-	regmap_update_bits(priv->map, JZ_REG_LCD_CTRL,
-			   JZ_LCD_CTRL_ENABLE | JZ_LCD_CTRL_DISABLE,
-			   JZ_LCD_CTRL_ENABLE);
+	if (priv->panel_is_slcd) {
+		ret = regmap_read_poll_timeout(priv->map,
+					       JZ_REG_LCD_SLCD_MSTATE, val,
+					       !(val & JZ_SLCD_MSTATE_BUSY),
+					       4, USEC_PER_MSEC * 100);
+		if (ret) {
+			dev_err(priv->dev, "CRTC enable timeout");
+			return;
+		}
+
+		regmap_write(priv->map, JZ_REG_LCD_SLCD_MCTRL,
+			     JZ_SLCD_MCTRL_DMATXEN);
+	} else {
+		regmap_update_bits(priv->map, JZ_REG_LCD_CTRL,
+				   JZ_LCD_CTRL_ENABLE | JZ_LCD_CTRL_DISABLE,
+				   JZ_LCD_CTRL_ENABLE);
+	}
 
 	drm_crtc_vblank_on(crtc);
 }
@@ -287,12 +316,16 @@ static void ingenic_drm_crtc_atomic_disable(struct drm_crtc *crtc,
 
 	drm_crtc_vblank_off(crtc);
 
-	regmap_update_bits(priv->map, JZ_REG_LCD_CTRL,
-			   JZ_LCD_CTRL_DISABLE, JZ_LCD_CTRL_DISABLE);
+	if (priv->panel_is_slcd) {
+		cancel_delayed_work(&priv->refresh_work);
+	} else {
+		regmap_update_bits(priv->map, JZ_REG_LCD_CTRL,
+				   JZ_LCD_CTRL_DISABLE, JZ_LCD_CTRL_DISABLE);
 
 	regmap_read_poll_timeout(priv->map, JZ_REG_LCD_STATE, var,
 				 var & JZ_LCD_STATE_DISABLED,
 				 1000, 0);
+	}
 }
 
 static void ingenic_drm_crtc_update_timings(struct ingenic_drm *priv,
@@ -813,7 +846,8 @@ static void ingenic_drm_encoder_atomic_mode_set(struct drm_encoder *encoder,
 		}
 	}
 
-	regmap_write(priv->map, JZ_REG_LCD_CFG, cfg);
+	//regmap_write(priv->map, JZ_REG_LCD_CFG, cfg);
+	regmap_update_bits(priv->map, JZ_REG_LCD_CFG, ~JZ_LCD_CFG_SLCD, cfg);
 	regmap_write(priv->map, JZ_REG_LCD_RGBC, rgbcfg);
 }
 
@@ -911,6 +945,7 @@ static int ingenic_drm_enable_vblank(struct drm_crtc *crtc)
 {
 	struct ingenic_drm *priv = drm_crtc_get_priv(crtc);
 
+	if (!priv->panel_is_slcd)
 	regmap_update_bits(priv->map, JZ_REG_LCD_CTRL,
 			   JZ_LCD_CTRL_EOF_IRQ, JZ_LCD_CTRL_EOF_IRQ);
 
@@ -920,7 +955,8 @@ static int ingenic_drm_enable_vblank(struct drm_crtc *crtc)
 static void ingenic_drm_disable_vblank(struct drm_crtc *crtc)
 {
 	struct ingenic_drm *priv = drm_crtc_get_priv(crtc);
-
+	
+	if (!priv->panel_is_slcd)
 	regmap_update_bits(priv->map, JZ_REG_LCD_CTRL, JZ_LCD_CTRL_EOF_IRQ, 0);
 }
 
@@ -1012,6 +1048,40 @@ static void ingenic_drm_destroy_state(struct drm_private_obj *obj,
 	struct ingenic_drm_private_state *priv_state = to_ingenic_drm_priv_state(state);
 
 	kfree(priv_state);
+}
+
+static void ingenic_drm_slcd_done(void *d)
+{
+	struct ingenic_drm *priv = d;
+	struct drm_display_mode *mode = &priv->crtc.state->adjusted_mode;
+
+	drm_crtc_handle_vblank(&priv->crtc);
+
+	schedule_delayed_work(&priv->refresh_work, HZ / (mode->crtc_vsync_end - mode->crtc_vsync_start));
+}
+
+static void ingenic_drm_refresh_work(struct work_struct *work)
+{
+	struct ingenic_drm *priv = work_struct_get_priv(work);
+	dma_addr_t hwaddr = priv->dma_hwdescs->hwdesc->addr;
+	struct dma_async_tx_descriptor *desc;
+	size_t len;
+
+	len = (priv->dma_hwdescs->hwdesc->cmd &~ JZ_LCD_CMD_EOF_IRQ) * 4;
+
+	desc = dmaengine_prep_slave_single(priv->dma_slcd,
+					   hwaddr, len,
+					   DMA_MEM_TO_DEV, 0);
+	if (IS_ERR(desc)) {
+		dev_err(priv->dev, "Unable to prepare DMA: %ld", PTR_ERR(desc));
+		return;
+	}
+
+	desc->callback_param = priv;
+	desc->callback = ingenic_drm_slcd_done;
+	dmaengine_submit(desc);
+
+	dma_async_issue_pending(priv->dma_slcd);
 }
 
 DEFINE_DRM_GEM_CMA_FOPS(ingenic_drm_fops);
@@ -1130,6 +1200,11 @@ static void ingenic_drm_atomic_private_obj_fini(struct drm_device *drm, void *pr
 	drm_atomic_private_obj_fini(private_obj);
 }
 
+static void ingenic_drm_dma_release(void *d)
+{
+	dma_release_channel(d);
+}
+
 static int ingenic_drm_bind(struct device *dev, bool has_components)
 {
 	struct platform_device *pdev = to_platform_device(dev);
@@ -1178,6 +1253,8 @@ static int ingenic_drm_bind(struct device *dev, bool has_components)
 	priv->dev = dev;
 	drm = &priv->drm;
 
+	INIT_DELAYED_WORK(&priv->refresh_work, ingenic_drm_refresh_work);
+
 	platform_set_drvdata(pdev, priv);
 
 	ret = drmm_mode_config_init(drm);
@@ -1202,6 +1279,46 @@ static int ingenic_drm_bind(struct device *dev, bool has_components)
 	if (IS_ERR(priv->map)) {
 		dev_err(dev, "Failed to create regmap\n");
 		return PTR_ERR(priv->map);
+	}
+
+	ret = regmap_attach_dev(dev, priv->map, &ingenic_drm_regmap_config);
+	if (ret) {
+		dev_err(dev, "Failed to attach regmap");
+		return ret;
+	}
+
+	priv->dma_slcd = dma_request_chan(dev, "slcd");
+	if (IS_ERR(priv->dma_slcd)) {
+		ret = PTR_ERR(priv->dma_slcd);
+
+		if (ret == -ENOENT) {
+			dev_notice(dev, "No SLCD DMA found, SLCD won't be used");
+			priv->dma_slcd = NULL;
+		} else {
+			if (ret != -EPROBE_DEFER)
+				dev_err(dev, "Failed to get SLCD DMA channel");
+			return ret;
+		}
+	} else {
+		struct dma_slave_config dma_conf = {
+			.src_addr_width = DMA_SLAVE_BUSWIDTH_4_BYTES,
+			.dst_addr_width = DMA_SLAVE_BUSWIDTH_2_BYTES,
+			.src_maxburst = 64,
+			.dst_maxburst = 8,
+			.direction = DMA_MEM_TO_DEV,
+			.dst_addr = CPHYSADDR(base + JZ_REG_LCD_SLCD_MFIFO),
+		};
+
+		ret = devm_add_action_or_reset(dev, ingenic_drm_dma_release,
+					       priv->dma_slcd);
+		if (ret)
+			return ret;
+
+		ret = dmaengine_slave_config(priv->dma_slcd, &dma_conf);
+		if (ret) {
+			dev_err(dev, "Unable to configure DMA");
+			return ret;
+		}
 	}
 
 	irq = platform_get_irq(pdev, 0);
@@ -1410,6 +1527,14 @@ static int ingenic_drm_bind(struct device *dev, bool has_components)
 	if (ret) {
 		dev_err(dev, "Unable to start pixel clock\n");
 		return ret;
+	}
+
+	if (priv->dma_slcd) {
+		ret = devm_ingenic_drm_init_dsi(dev, &priv->dsi_host);
+		if (ret) {
+			dev_err(dev, "Unable to init DSI host");
+			return ret;
+		}
 	}
 
 	if (priv->lcd_clk) {
