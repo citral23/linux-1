@@ -231,8 +231,8 @@
 		interrupt-parent = <&intc>;
 		interrupts = <25>;
 
-		dmas = <&dmac 27 0xffffffff>, <&dmac 26 0xffffffff>;
-		dma-names = "rx", "tx";
+		dmas = <&dmac 26 27 0xffffffff>;
+		dma-names = "tx-rx";
 
 		cap-sd-highspeed;
 		cap-mmc-highspeed;
@@ -249,8 +249,8 @@
 		interrupt-parent = <&intc>;
 		interrupts = <24>;
 
-		dmas = <&dmac 31 0xffffffff>, <&dmac 30 0xffffffff>;
-		dma-names = "rx", "tx";
+		dmas = <&dmac 30 31 0xffffffff>;
+		dma-names = "tx-rx";
 
 		cap-sd-highspeed;
 		cap-mmc-highspeed;
