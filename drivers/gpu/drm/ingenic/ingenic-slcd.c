@@ -14,6 +14,7 @@ static int ingenic_slcd_send_data(struct regmap *map, u32 data, bool cmd)
 {
 	unsigned int val;
 	int ret;
+	pr_info("ingenic slcd send data");
 
 	ret = regmap_read_poll_timeout(map, JZ_REG_LCD_SLCD_MSTATE, val,
 				       !(val & JZ_SLCD_MSTATE_BUSY),
@@ -34,6 +35,7 @@ static ssize_t ingenic_slcd_dsi_transfer(struct mipi_dsi_host *host,
 	const u8 *buf = msg->tx_buf;
 	unsigned int i;
 	int ret;
+	pr_info("ingenic slcd dsi transfer");
 
 	/* We only support sending messages, not receiving */
 	if (msg->rx_len)
@@ -50,7 +52,7 @@ static ssize_t ingenic_slcd_dsi_transfer(struct mipi_dsi_host *host,
 		return ret;
 	}
 
-	for (i = 1; i < msg->tx_len; i += 2) {
+	for (i = 1; i < msg->tx_len; i +=2) {
 		ret = ingenic_slcd_send_data(map, buf[1] << 8 | buf[2], false);
 		if (ret) {
 			dev_err(host->dev, "Unable to send data: %d", ret);
@@ -65,6 +67,7 @@ static int ingenic_slcd_dsi_attach(struct mipi_dsi_host *host,
 				   struct mipi_dsi_device *dsi)
 {
 	struct regmap *map = dev_get_regmap(host->dev, NULL);
+	pr_info("ingenic slcd dsi attach");
 
 	/* Give control of LCD pins to the SLCD module */
 	regmap_update_bits(map, JZ_REG_LCD_CFG,
@@ -72,7 +75,7 @@ static int ingenic_slcd_dsi_attach(struct mipi_dsi_host *host,
 
 	/* Configure for serial transfer, 8-bit commands and 8-bit data */
 	regmap_write(map, JZ_REG_LCD_SLCD_MCFG,
-		     JZ_SLCD_MCFG_DWIDTH_16BIT | JZ_SLCD_MCFG_CWIDTH_8BIT);
+		     JZ_SLCD_MCFG_DWIDTH_16BIT | JZ_SLCD_MCFG_CWIDTH_16BIT);
 
 	return 0;
 }
@@ -81,6 +84,7 @@ static int ingenic_slcd_dsi_detach(struct mipi_dsi_host *host,
 				   struct mipi_dsi_device *dsi)
 {
 	struct regmap *map = dev_get_regmap(host->dev, NULL);
+	pr_info("ingenic slcd dsi detach");
 
 	return regmap_update_bits(map, JZ_REG_LCD_CFG, JZ_LCD_CFG_SLCD, 0);
 }
@@ -103,6 +107,7 @@ int devm_ingenic_drm_init_dsi(struct device *dev,
 
 	dsi_host->dev = dev;
 	dsi_host->ops = &ingenic_slcd_dsi_ops;
+	pr_info("ingenic slcd drm init");
 
 	ret = mipi_dsi_host_register(dsi_host);
 	if (ret) {

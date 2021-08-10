@@ -2,6 +2,7 @@
 /dts-v1/;
 
 #include "jz4740.dtsi"
+
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/iio/adc/ingenic,adc.h>
 #include <dt-bindings/input/input.h>
@@ -9,6 +10,23 @@
 / {
 	compatible = "dingoo,a320", "ingenic,jz4740";
 	model = "Dingoo A320";
+
+	memory {
+		device_type = "memory";
+		reg = <0x0 0x2000000>;
+	};
+
+	reserved-memory {
+                #address-cells = <1>;
+                #size-cells = <1>;
+                ranges;
+
+                vmem: video-memory@1f00000 {
+                        compatible = "shared-dma-pool";
+                        reg = <0x1f00000 0x100000>;
+                        reusable;
+                };
+        };
 
 	aliases {
 		serial0 = &uart0;
@@ -18,208 +36,160 @@
 		stdout-path = "serial0:57600n8";
 	};
 
-	regulators {
-		#address-cells = <1>;
-		#size-cells = <0>;
-		compatible = "simple-bus";
+	vcc: regulator {
+		compatible = "regulator-fixed";
 
-		vcc: regulator@0 {
-			compatible = "regulator-fixed";
-
-			regulator-name = "vcc";
-			regulaor-min-microvolt = <3300000>;
-			regulaor-max-microvolt = <3300000>;
-			regulator-always-on;
-		};
+		regulator-name = "vcc";
+		regulaor-min-microvolt = <3300000>;
+		regulaor-max-microvolt = <3300000>;
+		regulator-always-on;
 	};
 
-	board {
-		#address-cells = <0>;
+	backlight: backlight {
+		compatible = "pwm-backlight";
+		pwms = <&pwm 7 5000000 0>;
+
+		brightness-levels = <0 16 32 48 64 80 112 144 192 255>;
+		default-brightness-level = <32>;
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&pins_pwm7>;
+	};
+
+	gpio_keys: keys@0 {
+		compatible = "gpio-keys";
+		#address-cells = <1>;
 		#size-cells = <0>;
-		compatible = "simple-bus";
 
-		backlight: backlight {
-			compatible = "pwm-backlight";
-			pwms = <&pwm 7 5000000 0>;
-
-			brightness-levels = <0 16 32 48 64 80 96 112 128 144 160 176 192 208 224 240 255>;
-			default-brightness-level = <12>;
-
-			pinctrl-names = "default";
-			pinctrl-0 = <&pins_pwm7>;
+		key_0: key@0 {
+			label = "D-pad up";
+			linux,code = <KEY_UP>;
+			gpios = <&gpd 6 GPIO_ACTIVE_LOW>;
 		};
 
-		keys {
-			compatible = "gpio-keys";
-			#address-cells = <1>;
-			#size-cells = <0>;
-
-			key@0 {
-				label = "D-pad up";
-				linux,code = <KEY_UP>;
-				gpios = <&gpd 6 GPIO_ACTIVE_LOW>;
-			};
-
-			key@1 {
-				label = "D-pad down";
-				linux,code = <KEY_DOWN>;
-				gpios = <&gpd 27 GPIO_ACTIVE_LOW>;
-			};
-
-			key@2 {
-				label = "D-pad left";
-				linux,code = <KEY_LEFT>;
-				gpios = <&gpd 5 GPIO_ACTIVE_LOW>;
-			};
-
-			key@3 {
-				label = "D-pad right";
-				linux,code = <KEY_RIGHT>;
-				gpios = <&gpd 18 GPIO_ACTIVE_LOW>;
-			};
-
-			key@4 {
-				label = "key A";
-				linux,code = <KEY_LEFTCTRL>;
-				gpios = <&gpd 0 GPIO_ACTIVE_LOW>;
-			};
-
-			key@5 {
-				label = "key B";
-				linux,code = <KEY_LEFTALT>;
-				gpios = <&gpd 1 GPIO_ACTIVE_LOW>;
-			};
-
-			key@6 {
-				label = "key X";
-				linux,code = <KEY_SPACE>;
-				gpios = <&gpd 19 GPIO_ACTIVE_LOW>;
-			};
-
-			key@7 {
-				label = "key Y";
-				linux,code = <KEY_LEFTSHIFT>;
-				gpios = <&gpd 2 GPIO_ACTIVE_LOW>;
-			};
-
-			key@8 {
-				label = "Left shoulder key";
-				linux,code = <KEY_TAB>;
-				gpios = <&gpd 14 GPIO_ACTIVE_LOW>;
-				debounce-interval = <5>;
-			};
-
-			key@9 {
-				label = "Right shoulder key";
-				linux,code = <KEY_BACKSPACE>;
-				gpios = <&gpd 15 GPIO_ACTIVE_LOW>;
-				debounce-interval = <5>;
-			};
-
-			key@10 {
-				label = "Start key";
-				linux,code = <KEY_ENTER>;
-				gpios = <&gpc 17 GPIO_ACTIVE_LOW>;
-				debounce-interval = <5>;
-			};
-
-			key@11 {
-				label = "Select key";
-				linux,code = <KEY_ESC>;
-				gpios = <&gpd 17 GPIO_ACTIVE_LOW>;
-				debounce-interval = <5>;
-			};
-
-			key@12 {
-				label = "Power slider";
-				linux,code = <KEY_POWER>;
-				gpios = <&gpd 29 GPIO_ACTIVE_LOW>;
-			};
-
-			key@13 {
-				label = "Power hold";
-				linux,code = <KEY_PAUSE>;
-				gpios = <&gpd 22 GPIO_ACTIVE_LOW>;
-			};
+		key_1: key@1 {
+			label = "D-pad down";
+			linux,code = <KEY_DOWN>;
+			gpios = <&gpd 27 GPIO_ACTIVE_LOW>;
 		};
 
-		usb_phy: usb-phy {
-			compatible = "usb-nop-xceiv";
-			#phy-cells = <0>;
-
-			vcc-supply = <&vcc>;
+		key_2: key@2 {
+			label = "D-pad left";
+			linux,code = <KEY_LEFT>;
+			gpios = <&gpd 5 GPIO_ACTIVE_LOW>;
 		};
 
-		i2c-controller {
-			compatible = "i2c-gpio";
-			#address-cells = <1>;
-			#size-cells = <0>;
-
-			sda-gpios = <&gpd 23 GPIO_ACTIVE_HIGH>;
-			scl-gpios = <&gpd 24 GPIO_ACTIVE_HIGH>;
-			i2c-gpio,delay-us = <2>;
-			i2c-gpio,timeout-ms = <3000>;
+		key_3: key@3 {
+			label = "D-pad right";
+			linux,code = <KEY_RIGHT>;
+			gpios = <&gpd 18 GPIO_ACTIVE_LOW>;
 		};
 
-		simple_battery: battery {
-			compatible = "simple-battery";
-			voltage-min-design-microvolt = <3600000>;
-			voltage-max-design-microvolt = <4200000>;
+		key_4: key@4 {
+			label = "key A";
+			linux,code = <KEY_LEFTCTRL>;
+			gpios = <&gpd 0 GPIO_ACTIVE_LOW>;
 		};
 
-		charger: charger {
-			compatible = "gpio-charger";
-			gpios = <&gpd 28 GPIO_ACTIVE_HIGH>;
-			charger-type = "usb-sdp";
+		key_5: key@5 {
+			label = "key B";
+			linux,code = <KEY_LEFTALT>;
+			gpios = <&gpd 1 GPIO_ACTIVE_LOW>;
 		};
 
-		pmu {
-			compatible = "ingenic,jz4740-battery";
-			io-channels = <&adc INGENIC_ADC_BATTERY>;
-			io-channel-names = "battery";
-
-			monitored-battery = <&simple_battery>;
-			power-supplies = <&charger>;
+		key_6: key@6 {
+			label = "key X";
+			linux,code = <KEY_SPACE>;
+			gpios = <&gpd 19 GPIO_ACTIVE_LOW>;
 		};
 
-		amp1: analog-amplifier@0 {
-			compatible = "simple-audio-amplifier";
-			enable-gpios = <&gpc 27 GPIO_ACTIVE_HIGH>;
-			sound-name-prefix = "Speaker Amp";
-			VCC-supply = <&vcc>;
+		key_7: key@7 {
+			label = "key Y";
+			linux,code = <KEY_LEFTSHIFT>;
+			gpios = <&gpd 2 GPIO_ACTIVE_LOW>;
 		};
 
-		amp2: analog-amplifier@1 {
-			compatible = "simple-audio-amplifier";
-			enable-gpios = <&gpd 7 GPIO_ACTIVE_HIGH>;
-			sound-name-prefix = "Line Amp";
-			VCC-supply = <&vcc>;
+		key_8: key@8 {
+			label = "Left shoulder key";
+			linux,code = <KEY_TAB>;
+			gpios = <&gpd 14 GPIO_ACTIVE_LOW>;
+			debounce-interval = <5>;
 		};
 
-		sound {
-			compatible = "simple-audio-card";
+		key_9: key@9 {
+			label = "Right shoulder key";
+			linux,code = <KEY_BACKSPACE>;
+			gpios = <&gpd 15 GPIO_ACTIVE_LOW>;
+			debounce-interval = <5>;
+		};
 
-			simple-audio-card,name = "Dingoo A320";
-			simple-audio-card,format = "i2s";
+		key_10: key@10 {
+			label = "Start key";
+			linux,code = <KEY_ENTER>;
+			gpios = <&gpc 17 GPIO_ACTIVE_LOW>;
+			debounce-interval = <5>;
+		};
 
-			simple-audio-card,widgets =
-				"Speaker", "Speaker",
-				"Headphone", "Headphones";
-			simple-audio-card,routing =
-				"Speaker Amp INL", "LOUT",
-				"Speaker Amp INR", "ROUT",
-				"Line Amp INL", "LOUT",
-				"Line Amp INR", "ROUT",
-				"Headphones", "Line Amp OUTL",
-				"Headphones", "Line Amp OUTR",
-				"Speaker", "Speaker Amp OUTL",
-				"Speaker", "Speaker Amp OUTR";
-			simple-audio-card,pin-switches = "Speaker", "Headphones";
+		key_11: key@11 {
+			label = "Select key";
+			linux,code = <KEY_ESC>;
+			gpios = <&gpd 17 GPIO_ACTIVE_LOW>;
+			debounce-interval = <5>;
+		};
 
-			simple-audio-card,aux-devs = <&amp1>, <&amp2>;
+		key12: key@12 {
+			label = "Power slider";
+			linux,code = <KEY_POWER>;
+			gpios = <&gpd 29 GPIO_ACTIVE_LOW>;
+		};
 
-			simple-audio-card,bitclock-master = <&dai_codec>;
-			simple-audio-card,frame-master = <&dai_codec>;
+		key13: key@13 {
+			label = "Power hold";
+			linux,code = <KEY_PAUSE>;
+			gpios = <&gpd 22 GPIO_ACTIVE_LOW>;
+		};
+	};
+		
+	amp1: analog-amplifier@0 {
+		compatible = "simple-audio-amplifier";
+		enable-gpios = <&gpc 27 GPIO_ACTIVE_HIGH>;
+		sound-name-prefix = "Speaker Amp";
+
+		VCC-supply = <&vcc>;
+	};
+
+	amp2: analog-amplifier@1 {
+		compatible = "simple-audio-amplifier";
+		enable-gpios = <&gpd 7 GPIO_ACTIVE_HIGH>;
+		sound-name-prefix = "Line Amp";
+
+		VCC-supply = <&vcc>;
+	};
+
+	sound_card: sound {
+		compatible = "simple-audio-card";
+
+		simple-audio-card,name = "Dingoo A320";
+		simple-audio-card,format = "i2s";
+
+		simple-audio-card,widgets =
+			"Speaker", "Speaker",
+			"Headphone", "Headphones";
+		simple-audio-card,routing =
+			"Speaker Amp INL", "LOUT",
+			"Speaker Amp INR", "ROUT",
+			"Line Amp INL", "LOUT",
+			"Line Amp INR", "ROUT",
+			"Headphones", "Line Amp OUTL",
+			"Headphones", "Line Amp OUTR",
+			"Speaker", "Speaker Amp OUTL",
+			"Speaker", "Speaker Amp OUTR";
+		simple-audio-card,pin-switches = "Speaker", "Headphones";
+
+		simple-audio-card,aux-devs = <&amp1>, <&amp2>;
+
+		simple-audio-card,bitclock-master = <&dai_codec>;
+		simple-audio-card,frame-master = <&dai_codec>;
 
 			dai_cpu: simple-audio-card,cpu {
 				sound-dai = <&aic>;
@@ -228,7 +198,71 @@
 			dai_codec: simple-audio-card,codec {
 				sound-dai = <&codec>;
 			};
-		};
+	};
+
+	usb_phy: usb-phy {
+		compatible = "usb-nop-xceiv";
+		#phy-cells = <0>;
+
+		vcc-supply = <&vcc>;
+	};
+
+	battery: battery {
+		compatible = "simple-battery";
+		voltage-min-design-microvolt = <3600000>;
+		voltage-max-design-microvolt = <4200000>;
+	};
+
+	charger: charger {
+		compatible = "gpio-charger";
+		gpios = <&gpd 28 GPIO_ACTIVE_HIGH>;
+		charger-type = "usb-sdp";
+	};
+
+	resistor: resistor {
+		compatible = "voltage-divider";
+		#io-channel-cells = <0>;
+
+		output-ohms = <1125>;
+		full-ohms = <3900>;
+
+		io-channels = <&adc INGENIC_ADC_BATTERY>;
+	};
+
+	pmu: pmu {
+		compatible = "ingenic,jz4740-battery";
+		io-channels = <&adc INGENIC_ADC_BATTERY>;
+		io-channel-names = "battery";
+		monitored-battery = <&battery>;
+		power-supplies = <&charger>;
+	};
+
+	amp1: analog-amplifier@0 {
+		compatible = "simple-audio-amplifier";
+		enable-gpios = <&gpc 27 GPIO_ACTIVE_HIGH>;
+		sound-name-prefix = "Speaker Amp";
+		VCC-supply = <&vcc>;
+	};
+
+	amp2: analog-amplifier@1 {
+		compatible = "simple-audio-amplifier";
+		enable-gpios = <&gpd 7 GPIO_ACTIVE_HIGH>;
+		sound-name-prefix = "Line Amp";
+		VCC-supply = <&vcc>;
+	};
+
+	cpu_opp_table: opp-table {
+		compatible = "operating-points-v2";
+
+		opp-216000000 { opp-hz = /bits/ 64 <216000000>; };
+		opp-300000000 { opp-hz = /bits/ 64 <300000000>; };
+		opp-336000000 { opp-hz = /bits/ 64 <336000000>; };
+		opp-360000000 { opp-hz = /bits/ 64 <360000000>; };
+		opp-378000000 { opp-hz = /bits/ 64 <378000000>; };
+		opp-396000000 { opp-hz = /bits/ 64 <396000000>; };
+		opp-420000000 { opp-hz = /bits/ 64 <420000000>; };
+		opp-438000000 { opp-hz = /bits/ 64 <438000000>; };
+		opp-456000000 { opp-hz = /bits/ 64 <456000000>; };
 	};
 };
 
@@ -238,6 +272,12 @@
 
 &rtc_dev {
 	system-power-controller;
+};
+
+&udc {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pins_udc>;
+	phys = <&usb_phy>;
 };
 
 &uart0 {
@@ -278,7 +318,7 @@
 
 	pins_udc: udc {
 		pins = "PD28";
-		bias-disable;
+	bias-disable;
 	};
 
 	pins_lcd: lcd {
@@ -287,19 +327,19 @@
 	};
 };
 
-&tcu {
-	/* 750 kHz for the system timer and clocksource */
-	assigned-clocks = <&tcu TCU_CLK_TIMER0>, <&tcu TCU_CLK_TIMER1>;
-	assigned-clock-rates = <750000>, <750000>;
-};
-
 &mmc {
 	bus-width = <4>;
 	max-frequency = <48000000>;
-	cd-gpios = <&gpb 29 GPIO_ACTIVE_HIGH>;
 
 	pinctrl-names = "default";
 	pinctrl-0 = <&pins_mmc>;
+
+	cd-gpios = <&gpb 29 GPIO_ACTIVE_LOW>;
+};
+
+&uart0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pins_uart0>;
 };
 
 &nemc {
@@ -310,7 +350,7 @@
 		#address-cells = <1>;
 		#size-cells = <0>;
 
-		ingenic,bch-controller = <&ecc>;
+		ecc-engine = <&ecc>;
 
 		ingenic,nemc-tAS = <10>;
 		ingenic,nemc-tAH = <5>;
@@ -321,7 +361,7 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&pins_nemc>;
 
-		rb-gpios = <&gpc 30 GPIO_ACTIVE_LOW>;
+		rb-gpios = <&gpc 30 GPIO_ACTIVE_HIGH>;
 
 		nand@1 {
 			reg = <1>;
@@ -351,24 +391,22 @@
 	};
 };
 
-&udc {
-	/*
-	 * Disable pullup of the USB detection pin: on the A320 pullup or not
-	 * seems to make no difference, but on A330 the signal will be unstable
-	 * when the pullup is enabled.
-	 */
-	pinctrl-names = "default";
-	pinctrl-0 = <&pins_udc>;
-
-	phys = <&usb_phy>;
+&tcu {
+	assigned-clocks = <&tcu TCU_CLK_TIMER0>, <&tcu TCU_CLK_TIMER1>, <&tcu TCU_CLK_WDT>;
+	assigned-clock-parents = <0>, <0>, <&cgu JZ4740_CLK_RTC>;
+	assigned-clock-rates = <750000>, <750000>;
 };
 
 &lcd {
+	memory-region = <&vmem>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&pins_lcd>;
 
 	#address-cells = <1>;
 	#size-cells = <0>;
+
+	dmas = <&dmac 30 0xffffffff>;
+	dma-names = "slcd";
 
 	panel@0 {
 		compatible = "ilitek,ili9331";
@@ -383,11 +421,31 @@
 				remote-endpoint = <&panel_output>;
 			};
 		};
-	};
 
+	};
+	
 	port {
 		panel_output: endpoint {
 			remote-endpoint = <&panel_input>;
 		};
 	};
+};
+
+/*
+&lcd_ports {
+	port@0 {
+		reg = <0>;
+
+		panel_output: endpoint {
+			remote-endpoint = <&panel_input>;
+		};
+	};
+};
+*/
+
+&cpu0 {
+	operating-points-v2 = <&cpu_opp_table>;
+
+	/* We use the main PLL as the CPU clock for the cpufreq driver. */
+	clocks = <&cgu JZ4740_CLK_PLL>;
 };
