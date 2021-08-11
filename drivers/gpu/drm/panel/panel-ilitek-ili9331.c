@@ -177,13 +177,13 @@ static const struct drm_display_mode ili9331_modes[] = {
 	{ /* 60 Hz */
 		.clock = 12000,
 		.hdisplay = 320,
-		.hsync_start = 320 + 30,
-		.hsync_end = 320 + 30 + 20,
-		.htotal = 320 + 30 + 20 + 30,
+		.hsync_start = 320 + 10,
+		.hsync_end = 320 + 10 + 20,
+		.htotal = 320 + 10 + 20 + 30,
 		.vdisplay = 240,
-		.vsync_start = 240 + 20,
-		.vsync_end = 240 + 20 + 20,
-		.vtotal	= 240 + 20 + 20 + 20,
+		.vsync_start = 240 + 10,
+		.vsync_end = 240 + 10 + 10,
+		.vtotal	= 240 + 10 + 10 + 20,
 	},
 };
 

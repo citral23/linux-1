@@ -279,7 +279,7 @@ static void ingenic_drm_crtc_atomic_enable(struct drm_crtc *crtc,
 	if (WARN_ON(!priv_state))
 		return;
 
-	regmap_write(priv->map, JZ_REG_LCD_STATE, 0);
+	//regmap_write(priv->map, JZ_REG_LCD_STATE, 0);
 
 	 /* Set address of our DMA descriptor chain */
         if (priv_state->use_palette) {	
@@ -292,6 +292,7 @@ static void ingenic_drm_crtc_atomic_enable(struct drm_crtc *crtc,
 	}
         regmap_write(priv->map, JZ_REG_LCD_DA1, dma_hwdesc_addr(priv, 1));
 
+	/*
 	if (priv->panel_is_slcd) {
 		pr_info("panel_is_slcd");
 		ret = regmap_read_poll_timeout(priv->map,
@@ -311,6 +312,7 @@ static void ingenic_drm_crtc_atomic_enable(struct drm_crtc *crtc,
 				   JZ_LCD_CTRL_ENABLE | JZ_LCD_CTRL_DISABLE,
 				   JZ_LCD_CTRL_ENABLE);
 	}
+	*/
 
 	drm_crtc_vblank_on(crtc);
 }
@@ -891,6 +893,34 @@ static int ingenic_drm_bridge_attach(struct drm_bridge *bridge,
 				 &bec->bridge, flags);
 }
 
+static void ingenic_drm_bridge_atomic_enable(struct drm_bridge *bridge,
+                                             struct drm_bridge_state *old_bridge_state)
+{
+        struct ingenic_drm *priv = drm_device_get_priv(bridge->dev);
+        unsigned int val;
+        int ret;
+
+        regmap_write(priv->map, JZ_REG_LCD_STATE, 0);
+
+        if (priv->panel_is_slcd) {
+                ret = regmap_read_poll_timeout(priv->map,
+                                               JZ_REG_LCD_SLCD_MSTATE, val,
+                                               !(val & JZ_SLCD_MSTATE_BUSY),
+                                               4, USEC_PER_MSEC * 100);
+                if (ret) {
+                        dev_err(priv->dev, "CRTC enable timeout");
+                        return;
+                }
+
+                regmap_write(priv->map, JZ_REG_LCD_SLCD_MCTRL,
+                             JZ_SLCD_MCTRL_DMATXEN);
+        } else {
+                regmap_update_bits(priv->map, JZ_REG_LCD_CTRL,
+                                   JZ_LCD_CTRL_ENABLE | JZ_LCD_CTRL_DISABLE,
+                                   JZ_LCD_CTRL_ENABLE);
+        }
+}
+
 static int ingenic_drm_bridge_atomic_check(struct drm_bridge *bridge,
 					   struct drm_bridge_state *bridge_state,
 					   struct drm_crtc_state *crtc_state,
@@ -1194,6 +1224,7 @@ static const struct drm_encoder_helper_funcs ingenic_drm_encoder_helper_funcs = 
 
 static const struct drm_bridge_funcs ingenic_drm_bridge_funcs = {
 	.attach			= ingenic_drm_bridge_attach,
+	.atomic_enable		= ingenic_drm_bridge_atomic_enable,
 	.atomic_check		= ingenic_drm_bridge_atomic_check,
 	.atomic_reset		= drm_atomic_helper_bridge_reset,
 	.atomic_duplicate_state	= drm_atomic_helper_bridge_duplicate_state,
@@ -1651,7 +1682,7 @@ static int ingenic_drm_bind(struct device *dev, bool has_components)
 		goto err_clk_notifier_unregister;
 	}
 
-	drm_fbdev_generic_setup(drm, 32);
+	drm_fbdev_generic_setup(drm, 16);
 
 	pr_info("drm drm_bind end");
 
