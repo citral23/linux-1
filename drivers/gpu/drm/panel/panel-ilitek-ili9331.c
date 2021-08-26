@@ -117,7 +117,6 @@ static int ili9331_prepare(struct drm_panel *panel)
 	struct ili9331 *priv = panel_to_ili9331(panel);
 	unsigned int i;
 	int ret;
-	pr_info("ili9331 prepare");
 
 	gpiod_set_value(priv->reset_gpiod, 0);
 	msleep(10);
@@ -145,7 +144,6 @@ out_err:
 static int ili9331_enable(struct drm_panel *panel)
 {
 	struct ili9331 *priv = panel_to_ili9331(panel);
-	pr_info("ili9331 enable");
 
 	backlight_enable(priv->backlight);
 
@@ -155,7 +153,6 @@ static int ili9331_enable(struct drm_panel *panel)
 static int ili9331_disable(struct drm_panel *panel)
 {
 	struct ili9331 *priv = panel_to_ili9331(panel);
-	pr_info("ili9331 disable");
 
 	backlight_disable(priv->backlight);
 
@@ -165,7 +162,6 @@ static int ili9331_disable(struct drm_panel *panel)
 static int ili9331_unprepare(struct drm_panel *panel)
 {
 	struct ili9331 *priv = panel_to_ili9331(panel);
-	pr_info("ili9331 unprepare");
 
 	gpiod_set_value(priv->reset_gpiod, 0);
 	gpiod_set_value(priv->cs_gpiod, 1);
@@ -194,7 +190,6 @@ static int ili9331_get_modes(struct drm_panel *panel,
 	const struct ili9331_panel_info *panel_info = priv->panel_info;
 	struct drm_display_mode *mode;
 	unsigned int i;
-	pr_info("ili9331 get_modes");
 
 	for (i = 0; i < panel_info->num_modes; i++) {
 		mode = drm_mode_duplicate(connector->dev,
@@ -269,6 +264,7 @@ static int ili9331_dsi_probe(struct mipi_dsi_device *dsi)
 	drm_panel_init(&priv->panel, dev, &ili9331_funcs,
 		       DRM_MODE_CONNECTOR_DPI);
 
+	pr_info("drm_panel_add");
 	drm_panel_add(&priv->panel);
 	if (ret < 0)
 		return ret;
@@ -277,6 +273,7 @@ static int ili9331_dsi_probe(struct mipi_dsi_device *dsi)
 	dsi->format = MIPI_DSI_FMT_RGB888;
 	dsi->lanes = 4;
 
+	pr_info("mipi_dsi_attach");
 	ret = mipi_dsi_attach(dsi);
 	if (ret < 0)
 		return ret;

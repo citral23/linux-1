@@ -869,12 +869,15 @@ int ubi_attach_mtd_dev(struct mtd_info *mtd, int ubi_num,
 	 * Relax this rule if the partition we're attaching to operates in SLC
 	 * mode.
 	 */
+	
+	/*
 	if (mtd->type == MTD_MLCNANDFLASH &&
 	    !(mtd->flags & MTD_SLC_ON_MLC_EMULATION)) {
 		pr_err("ubi: refuse attaching mtd%d - MLC NAND is not supported\n",
 			mtd->index);
 		return -EINVAL;
 	}
+	*/
 
 	if (ubi_num == UBI_DEV_NUM_AUTO) {
 		/* Search for an empty slot in the @ubi_devices array */

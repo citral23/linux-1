@@ -9,7 +9,7 @@
 
 / {
 	compatible = "dingoo,a320", "ingenic,jz4740";
-	model = "Dingoo A320";
+	model = "A320";
 
 	memory {
 		device_type = "memory";
@@ -334,7 +334,7 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pins_mmc>;
 
-	cd-gpios = <&gpb 29 GPIO_ACTIVE_LOW>;
+	cd-gpios = <&gpb 29 GPIO_ACTIVE_HIGH>;
 };
 
 &uart0 {
@@ -379,12 +379,12 @@
 
 				partition@0 {
 					label = "bootloader";
-					reg = <0x0 0x20000>;
+					reg = <0x0 0x80000>;
 				};
 
-				partition@20000 {
+				partition@80000 {
 					label = "system";
-					reg = <0x20000 0x0>;
+					reg = <0x80000 0x0>;
 				};
 			};
 		};

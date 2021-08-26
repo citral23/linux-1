@@ -141,6 +141,7 @@
 
 #define JZ_LCD_SYNC_MASK			0x3ff
 
+#define JZ_LCD_STATE_QD				BIT(7)
 #define JZ_LCD_STATE_EOF_IRQ			BIT(5)
 #define JZ_LCD_STATE_SOF_IRQ			BIT(4)
 #define JZ_LCD_STATE_DISABLED			BIT(0)
