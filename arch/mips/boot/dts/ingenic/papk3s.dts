@@ -1,0 +1,63 @@
+// SPDX-License-Identifier: GPL-2.0
+/dts-v1/;
+
+#include "rs97.dts"
+
+/ {
+	compatible = "ylm,papk3s", "ingenic,jz4760";
+	model = "PAP-KIIIS";
+
+	lcd-panel-1 {
+		compatible = "qishenglong,gopher2b-lcd";
+
+		power-supply = <&vcc>;
+		backlight = <&backlight>;
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&pins_lcd>;
+
+		port {
+			lcd_panel_input: endpoint {
+				remote-endpoint = <&panel_output>;
+			};
+		};
+	};
+};
+
+&gpio_keys {
+	button-13 {
+		label = "Volume+ button";
+		linux,code = <KEY_VOLUMEUP>;
+		linux,can-disable;
+		gpios = <&gpd 21 GPIO_ACTIVE_LOW>;
+	};
+
+	button-14 {
+		label = "Volume- button";
+		linux,code = <KEY_VOLUMEDOWN>;
+		linux,can-disable;
+		gpios = <&gpd 25 GPIO_ACTIVE_LOW>;
+	};
+};
+
+
+
+&spi {
+	status = "disabled";
+};
+
+&panel {
+	status = "disabled";
+};
+
+&pins_lcd {
+	groups = "lcd-8bit", "lcd-16bit", "lcd-18bit", "lcd-24bit", "lcd-generic";
+};
+
+&panel_output {
+	remote-endpoint = <&lcd_panel_input>;
+};
+
+&panel_input {
+	remote-endpoint = <&panel_input>;
+};
