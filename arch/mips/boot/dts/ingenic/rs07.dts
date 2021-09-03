@@ -1,0 +1,104 @@
+// SPDX-License-Identifier: GPL-2.0
+/dts-v1/;
+
+#include "rs97.dts"
+#include "jz4760b.dtsi"
+
+/ {
+	compatible = "ylm,rs07", "ingenic,jz4760b";
+	model = "RS07";
+
+	lcd-panel-1 {
+		compatible = "qishenglong,gopher2b-lcd";
+
+		power-supply = <&vcc>;
+		backlight = <&backlight>;
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&pins_lcd>;
+
+		port {
+			lcd_panel_input: endpoint {
+				remote-endpoint = <&panel_output>;
+			};
+		};
+	};
+};
+
+&gpio_keys {
+	button-4 {
+		label = "Button A";
+		linux,code = <KEY_LEFTCTRL>;
+		linux,can-disable;
+		gpios = <&gpd 23 GPIO_ACTIVE_LOW>;
+	};
+
+	button-5 {
+		label = "Button B";
+		linux,code = <KEY_LEFTALT>;
+		linux,can-disable;
+		gpios = <&gpb 16 GPIO_ACTIVE_LOW>;
+	};
+
+	button-6 {
+		label = "Button Y";
+		linux,code = <KEY_SPACE>;
+		linux,can-disable;
+		gpios = <&gpd 22 GPIO_ACTIVE_LOW>;
+	};
+
+	button-7 {
+		label = "Button X";
+		linux,code = <KEY_LEFTSHIFT>;
+		linux,can-disable;
+		gpios = <&gpb 15 GPIO_ACTIVE_LOW>;
+	};
+
+	button-12 {
+		status = "disabled";
+	};
+
+	button-13 {
+		status = "disabled";
+	};
+};
+
+&usb_conn {
+	compatible = "gpio-usb-a-connector", "usb-a-connector";
+	label = "USB-A";
+
+	vbus-gpio = <&gpe 13 GPIO_ACTIVE_HIGH>;
+	vbus-supply = <&vcc>;
+};
+
+&pinctrl {
+	otg {
+		vbus-pin {
+			pins = "PE13";
+		};
+	};
+};
+
+&spi {
+	status = "disabled";
+};
+
+&panel {
+	status = "disabled";
+};
+
+&pins_lcd {
+	groups = "lcd-8bit", "lcd-16bit", "lcd-18bit", "lcd-24bit", "lcd-generic";
+};
+
+&panel_output {
+	remote-endpoint = <&lcd_panel_input>;
+};
+
+&panel_input {
+	remote-endpoint = <&panel_input>;
+};
+
+&usb_otg {
+	dr_mode = "host";
+};
