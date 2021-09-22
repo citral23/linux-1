@@ -444,6 +444,9 @@
 	clock-names = "rtc";
 
 	system-power-controller;
+
+	ingenic,reset-pin-assert-time-ms = <125>;
+	ingenic,min-wakeup-pin-assert-time-ms = <500>;
 };
 
 &mmc0 {
