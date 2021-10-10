@@ -264,12 +264,7 @@ static int nv3052c_prepare(struct drm_panel *panel)
 	usleep_range(10, 1000);
 	gpiod_set_value_cansleep(priv->reset_gpio, 0);
 
-	/*
-	 * Doc says a 5ms sleep should be enough, but it doesn't seem to be the
-	 * case; sleeping for less than 40ms results in graphical glitches when
-	 * powering on the screen.
-	 */
-	msleep(40);
+	msleep(5);
 
 	for (i = 0; i < ARRAY_SIZE(nv3052c_regs); i++) {
 		err = mipi_dsi_dcs_write(priv->dsi, nv3052c_regs[i].cmd,
@@ -279,8 +274,6 @@ static int nv3052c_prepare(struct drm_panel *panel)
 			goto err_disable_regulator;
 		}
 	}
-
-	msleep(120);
 
 	err = mipi_dsi_dcs_exit_sleep_mode(priv->dsi);
 	if (err) {
