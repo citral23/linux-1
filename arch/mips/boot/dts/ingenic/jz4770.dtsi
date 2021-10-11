@@ -269,8 +269,8 @@
 		interrupt-parent = <&intc>;
 		interrupts = <37>;
 
-		dmas = <&dmac1 27 0xffffffff>, <&dmac1 26 0xffffffff>;
-		dma-names = "rx", "tx";
+		dmas = <&dmac1 26 27 0xffffffff>;
+		dma-names = "tx-rx";
 
 		cap-sd-highspeed;
 		cap-mmc-highspeed;
@@ -289,8 +289,8 @@
 		interrupt-parent = <&intc>;
 		interrupts = <36>;
 
-		dmas = <&dmac1 31 0xffffffff>, <&dmac1 30 0xffffffff>;
-		dma-names = "rx", "tx";
+		dmas = <&dmac1 30 31 0xffffffff>;
+		dma-names = "tx-rx";
 
 		cap-sd-highspeed;
 		cap-mmc-highspeed;
@@ -309,8 +309,8 @@
 		interrupt-parent = <&intc>;
 		interrupts = <35>;
 
-		dmas = <&dmac1 37 0xffffffff>, <&dmac1 36 0xffffffff>;
-		dma-names = "rx", "tx";
+		dmas = <&dmac1 36 37 0xffffffff>;
+		dma-names = "tx-rx";
 
 		cap-sd-highspeed;
 		cap-mmc-highspeed;
@@ -423,7 +423,7 @@
 		compatible = "ingenic,jz4770-dma";
 		reg = <0x13420100 0xC0>, <0x13420400 0x20>;
 
-		#dma-cells = <2>;
+		#dma-cells = <3>;
 
 		clocks = <&cgu JZ4770_CLK_DMA>;
 		interrupt-parent = <&intc>;
