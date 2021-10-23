@@ -74,7 +74,7 @@
 		regulator-min-microvolt = <3300000>;
 		regulator-max-microvolt = <3300000>;
 
-		gpio = <&gpb 25 GPIO_ACTIVE_LOW>;
+		gpio = <&gpb 25 0>;
 		enable-active-high;
 	};
 
@@ -102,7 +102,7 @@
 
 		regulator-name = "wlan0_power";
 
-		gpio = <&gpb 19 GPIO_ACTIVE_LOW>;
+		gpio = <&gpb 19 0>;
 		enable-active-high;
 	};
 
@@ -113,7 +113,7 @@
 		regulator-min-microvolt = <5000000>;
 		regulator-max-microvolt = <5000000>;
 
-		gpio = <&gpf 14 GPIO_ACTIVE_LOW>;
+		gpio = <&gpf 14 0>;
 		enable-active-high;
 	};
 };
