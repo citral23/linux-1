@@ -18,7 +18,7 @@ config DRM_INGENIC
 if DRM_INGENIC
 
 config DRM_INGENIC_IPU
-	bool "IPU support for Ingenic SoCs"
+	tristate "IPU support for Ingenic SoCs"
 	help
 	  Choose this option to enable support for the IPU found in Ingenic SoCs.
 
