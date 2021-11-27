@@ -259,10 +259,10 @@ config DRM_PANEL_NEC_NL8048HL11
 	  as a module, choose M here.
 
 config DRM_PANEL_NEWVISION_NV3052C
-	tristate "NewVision NV3052C DSI/SPI RGB panel"
-	depends on OF
-	depends on DRM_MIPI_DSI
+	tristate "NewVision NV3052C RGB/SPI panel"
+	depends on OF && SPI
 	depends on BACKLIGHT_CLASS_DEVICE
+	select DRM_MIPI_DBI
 	help
 	  Say Y here if you want to enable support for the panels built
 	  around the NewVision NV3052C display controller.

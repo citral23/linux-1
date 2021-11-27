@@ -12,38 +12,38 @@
 #include <linux/module.h>
 #include <linux/of_device.h>
 #include <linux/regulator/consumer.h>
-
-#include <drm/drm_mipi_dsi.h>
-#include <drm/drm_mipi_dbi_spi.h>
-#include <drm/drm_modes.h>
-#include <drm/drm_panel.h>
+#include <linux/spi/spi.h>
 
 #include <video/mipi_display.h>
+
+#include <drm/drm_mipi_dbi.h>
+#include <drm/drm_modes.h>
+#include <drm/drm_panel.h>
 
 struct nv3052c_panel_info {
 	const struct drm_display_mode *display_modes;
 	unsigned int num_modes;
-	unsigned int bus_type;
 	u16 width_mm, height_mm;
 	u32 bus_format, bus_flags;
 };
 
-struct nv3052c_reg {
-	u8 cmd;
-	u8 value;
-};
-
 struct nv3052c {
+	struct device *dev;
 	struct drm_panel panel;
-	struct mipi_dsi_device *dsi;
+	struct mipi_dbi dbi;
 
-	struct regulator *supply;
 	const struct nv3052c_panel_info *panel_info;
 
+	struct regulator *supply;
 	struct gpio_desc *reset_gpio;
 };
 
-static const struct nv3052c_reg nv3052c_regs[] = {
+struct nv3052c_reg {
+	u8 cmd;
+	u8 val;
+};
+
+static const struct nv3052c_reg nv3052c_panel_regs[] = {
 	{ 0xff, 0x30 },
 	{ 0xff, 0x52 },
 	{ 0xff, 0x01 },
@@ -237,9 +237,9 @@ static const struct nv3052c_reg nv3052c_regs[] = {
 	{ 0x10, 0x2b },
 
 	{ 0xff, 0x30 },
-	{ 0xff, 0x52 },
-	{ 0xff, 0x00 },
-	{ 0x36, 0x0a },
+        { 0xff, 0x52 },
+        { 0xff, 0x00 },
+        { 0x36, 0x0a },
 };
 
 static inline struct nv3052c *to_nv3052c(struct drm_panel *panel)
@@ -250,12 +250,13 @@ static inline struct nv3052c *to_nv3052c(struct drm_panel *panel)
 static int nv3052c_prepare(struct drm_panel *panel)
 {
 	struct nv3052c *priv = to_nv3052c(panel);
+	struct mipi_dbi *dbi = &priv->dbi;
 	unsigned int i;
 	int err;
 
 	err = regulator_enable(priv->supply);
 	if (err) {
-		dev_err(panel->dev, "Failed to enable power supply: %d\n", err);
+		dev_err(priv->dev, "Failed to enable power supply: %d\n", err);
 		return err;
 	}
 
@@ -263,22 +264,22 @@ static int nv3052c_prepare(struct drm_panel *panel)
 	gpiod_set_value_cansleep(priv->reset_gpio, 1);
 	usleep_range(10, 1000);
 	gpiod_set_value_cansleep(priv->reset_gpio, 0);
-
 	msleep(5);
 
-	for (i = 0; i < ARRAY_SIZE(nv3052c_regs); i++) {
-		err = mipi_dsi_dcs_write(priv->dsi, nv3052c_regs[i].cmd,
-					 &nv3052c_regs[i].value, 1);
+	for (i = 0; i < ARRAY_SIZE(nv3052c_panel_regs); i++) {
+		err = mipi_dbi_command(dbi, nv3052c_panel_regs[i].cmd,
+				       nv3052c_panel_regs[i].val);
+
 		if (err) {
-			dev_err(panel->dev, "Unable to set register: %d\n", err);
+			dev_err(priv->dev, "Unable to set register: %d\n", err);
 			goto err_disable_regulator;
 		}
 	}
 
-	err = mipi_dsi_dcs_exit_sleep_mode(priv->dsi);
+	err = mipi_dbi_command(dbi, MIPI_DCS_EXIT_SLEEP_MODE);
 	if (err) {
-		dev_err(panel->dev, "Unable to exit sleep mode: %d\n", err);
-		return err;
+			dev_err(priv->dev, "Unable to exit sleep mode: %d\n", err);
+			goto err_disable_regulator;
 	}
 
 	return 0;
@@ -291,16 +292,16 @@ err_disable_regulator:
 static int nv3052c_unprepare(struct drm_panel *panel)
 {
 	struct nv3052c *priv = to_nv3052c(panel);
+	struct mipi_dbi *dbi = &priv->dbi;
 	int err;
 
-	err = mipi_dsi_dcs_enter_sleep_mode(priv->dsi);
+	err = mipi_dbi_command(dbi, MIPI_DCS_ENTER_SLEEP_MODE);
 	if (err) {
-		dev_err(panel->dev, "Unable to enter sleep mode: %d\n", err);
+		dev_err(priv->dev, "Unable to enter sleep mode: %d\n", err);
 		return err;
 	}
 
 	gpiod_set_value_cansleep(priv->reset_gpio, 1);
-
 	regulator_disable(priv->supply);
 
 	return 0;
@@ -309,17 +310,18 @@ static int nv3052c_unprepare(struct drm_panel *panel)
 static int nv3052c_enable(struct drm_panel *panel)
 {
 	struct nv3052c *priv = to_nv3052c(panel);
+	struct mipi_dbi *dbi = &priv->dbi;
 	int err;
 
-	err = mipi_dsi_dcs_set_display_on(priv->dsi);
+	err = mipi_dbi_command(dbi, MIPI_DCS_SET_DISPLAY_ON);
 	if (err) {
-		dev_err(panel->dev, "Unable to enable display: %d\n", err);
+		dev_err(priv->dev, "Unable to enable display: %d\n", err);
 		return err;
 	}
 
 	if (panel->backlight) {
 		/* Wait for the picture to be ready before enabling backlight */
-		usleep_range(10000, 20000);
+		msleep(120);
 	}
 
 	return 0;
@@ -328,11 +330,12 @@ static int nv3052c_enable(struct drm_panel *panel)
 static int nv3052c_disable(struct drm_panel *panel)
 {
 	struct nv3052c *priv = to_nv3052c(panel);
+	struct mipi_dbi *dbi = &priv->dbi;
 	int err;
 
-	err = mipi_dsi_dcs_set_display_off(priv->dsi);
+	err = mipi_dbi_command(dbi, MIPI_DCS_SET_DISPLAY_OFF);
 	if (err) {
-		dev_err(panel->dev, "Unable to disable display: %d\n", err);
+		dev_err(priv->dev, "Unable to disable display: %d\n", err);
 		return err;
 	}
 
@@ -381,9 +384,9 @@ static const struct drm_panel_funcs nv3052c_funcs = {
 	.get_modes	= nv3052c_get_modes,
 };
 
-static int nv3052c_probe(struct mipi_dsi_device *dsi)
+static int nv3052c_probe(struct spi_device *spi)
 {
-	struct device *dev = &dsi->dev;
+	struct device *dev = &spi->dev;
 	struct nv3052c *priv;
 	int err;
 
@@ -391,14 +394,11 @@ static int nv3052c_probe(struct mipi_dsi_device *dsi)
 	if (!priv)
 		return -ENOMEM;
 
-	priv->dsi = dsi;
-	mipi_dsi_set_drvdata(dsi, priv);
+	priv->dev = dev;
 
 	priv->panel_info = of_device_get_match_data(dev);
 	if (!priv->panel_info)
 		return -EINVAL;
-
-	dsi->bus_type = priv->panel_info->bus_type;
 
 	priv->supply = devm_regulator_get(dev, "power");
 	if (IS_ERR(priv->supply)) {
@@ -412,6 +412,14 @@ static int nv3052c_probe(struct mipi_dsi_device *dsi)
 		return PTR_ERR(priv->reset_gpio);
 	}
 
+	err = mipi_dbi_spi_init(spi, &priv->dbi, NULL);
+        if (err)
+                return dev_err_probe(dev, err, "MIPI DBI init failed\n");
+
+	priv->dbi.read_commands = NULL;
+
+	spi_set_drvdata(spi, priv);
+
 	drm_panel_init(&priv->panel, dev, &nv3052c_funcs,
 		       DRM_MODE_CONNECTOR_DPI);
 
@@ -424,28 +432,14 @@ static int nv3052c_probe(struct mipi_dsi_device *dsi)
 
 	drm_panel_add(&priv->panel);
 
-	err = mipi_dsi_attach(dsi);
-	if (err) {
-		dev_err(dev, "Failed to attach panel\n");
-		drm_panel_remove(&priv->panel);
-		return err;
-	}
-
-	/*
-	 * We can't call mipi_dsi_maybe_register_tiny_driver(), since the
-	 * NV3052C does not support MIPI_DCS_WRITE_MEMORY_START.
-	 */
-
 	return 0;
 }
 
-static int nv3052c_remove(struct mipi_dsi_device *dsi)
+static int nv3052c_remove(struct spi_device *spi)
 {
-	struct nv3052c *priv = mipi_dsi_get_drvdata(dsi);
+	struct nv3052c *priv = spi_get_drvdata(spi);
 
-	mipi_dsi_detach(dsi);
 	drm_panel_remove(&priv->panel);
-
 	drm_panel_disable(&priv->panel);
 	drm_panel_unprepare(&priv->panel);
 
@@ -482,7 +476,6 @@ static const struct drm_display_mode ltk035c5444t_modes[] = {
 static const struct nv3052c_panel_info ltk035c5444t_spi_panel_info = {
 	.display_modes = ltk035c5444t_modes,
 	.num_modes = ARRAY_SIZE(ltk035c5444t_modes),
-	.bus_type = MIPI_DCS_BUS_TYPE_DBI_SPI_C1,
 	.width_mm = 77,
 	.height_mm = 64,
 	.bus_format = MEDIA_BUS_FMT_RGB888_1X24,
@@ -495,7 +488,7 @@ static const struct of_device_id nv3052c_of_match[] = {
 };
 MODULE_DEVICE_TABLE(of, nv3052c_of_match);
 
-static struct mipi_dsi_driver nv3052c_driver = {
+static struct spi_driver nv3052c_driver = {
 	.driver = {
 		.name = "nv3052c",
 		.of_match_table = nv3052c_of_match,
@@ -503,7 +496,7 @@ static struct mipi_dsi_driver nv3052c_driver = {
 	.probe = nv3052c_probe,
 	.remove = nv3052c_remove,
 };
-module_mipi_dbi_spi_driver(nv3052c_driver, nv3052c_of_match);
+module_spi_driver(nv3052c_driver);
 
 MODULE_AUTHOR("Paul Cercueil <paul@crapouillou.net>");
 MODULE_LICENSE("GPL v2");
