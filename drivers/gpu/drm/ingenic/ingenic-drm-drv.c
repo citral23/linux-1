@@ -1218,7 +1218,6 @@ static int ingenic_drm_bind(struct device *dev, bool has_components)
 	struct clk *parent_clk;
 	struct drm_plane *primary;
 	struct drm_bridge *bridge;
-	struct drm_panel *panel;
 	struct drm_connector *connector;
 	struct drm_encoder *encoder;
 	struct ingenic_drm_bridge *ib;
@@ -1390,18 +1389,15 @@ static int ingenic_drm_bind(struct device *dev, bool has_components)
 	}
 
 	for (i = 0; ; i++) {
-		ret = drm_of_find_panel_or_bridge(dev->of_node, 0, i, &panel, &bridge);
-		if (ret) {
+		bridge = devm_drm_of_get_bridge(dev, dev->of_node, 0, i);
+		if (IS_ERR(bridge)) {
+			ret = PTR_ERR(bridge);
 			if (ret == -ENODEV)
 				break; /* we're done */
 			if (ret != -EPROBE_DEFER)
 				dev_err(dev, "Failed to get bridge handle\n");
 			return ret;
 		}
-
-		if (panel)
-			bridge = devm_drm_panel_bridge_add_typed(dev, panel,
-								 DRM_MODE_CONNECTOR_DPI);
 
 		ib = drmm_encoder_alloc(drm, struct ingenic_drm_bridge, encoder,
 					NULL, DRM_MODE_ENCODER_DPI, NULL);
