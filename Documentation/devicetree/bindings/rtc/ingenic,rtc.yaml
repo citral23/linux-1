@@ -18,14 +18,14 @@ properties:
       - enum:
           - ingenic,jz4740-rtc
           - ingenic,jz4760-rtc
+          - ingenic,jz4770-rtc
       - items:
           - const: ingenic,jz4725b-rtc
           - const: ingenic,jz4740-rtc
       - items:
           - enum:
-              - ingenic,jz4770-rtc
               - ingenic,jz4780-rtc
-          - const: ingenic,jz4760-rtc
+          - const: ingenic,jz4770-rtc
 
   reg:
     maxItems: 1
@@ -38,6 +38,9 @@ properties:
 
   clock-names:
     const: rtc
+
+  "#clock-cells":
+    const: 0
 
   system-power-controller:
     description: |

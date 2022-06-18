@@ -1,0 +1,49 @@
+// SPDX-License-Identifier: GPL-2.0
+/dts-v1/;
+
+#include "rg350m.dts"
+
+#include <dt-bindings/interrupt-controller/irq.h>
+
+/ {
+	compatible = "ylm,rg300x", "ingenic,jz4770";
+	model = "Anbernic RG-300X";
+};
+
+&panel {
+	compatible = "focaltech,gpt3";
+};
+
+&btn17 {
+	status = "disabled";
+};
+
+&btn18 {
+	status = "disabled";
+};
+
+&joystick {
+	status = "disabled";
+};
+
+&pinctrl {
+	pins_power_led: power-led {
+		pin = "PB30";
+		input-enable;
+		bias-pull-up;
+	};
+};
+
+/*
+ * On the RG-300X, the LEDs are way too powerful. Work around this by setting
+ * the GPIO as input with the pull-up resitor enabled, which causes the voltage
+ * to be low enough that the LEDs are just slightly lit.
+ */
+&power_led {
+	status = "disabled";
+};
+
+&leds {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pins_power_led>;
+};
