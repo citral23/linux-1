@@ -151,6 +151,13 @@ struct iio_dev
 }
 EXPORT_SYMBOL_GPL(iio_channel_cb_get_iio_dev);
 
+struct iio_buffer
+*iio_channel_cb_get_iio_buffer(struct iio_cb_buffer *cb_buffer)
+{
+	return &cb_buffer->buffer;
+}
+EXPORT_SYMBOL_GPL(iio_channel_cb_get_iio_buffer);
+
 MODULE_AUTHOR("Jonathan Cameron <jic23@kernel.org>");
 MODULE_DESCRIPTION("Industrial I/O callback buffer");
 MODULE_LICENSE("GPL");

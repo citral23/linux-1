@@ -197,6 +197,18 @@ struct iio_dev
 *iio_channel_cb_get_iio_dev(const struct iio_cb_buffer *cb_buffer);
 
 /**
+ * iio_channel_cb_get_iio_buffer() - get access to the underlying buffer.
+ * @cb_buffer:		The callback buffer from whom we want the buffer
+ *			information.
+ *
+ * This function allows one to obtain information about the buffer.
+ * The primary aim is to allow drivers that are consuming a buffer to query
+ * things like channel offsets in the buffer.
+ */
+struct iio_buffer
+*iio_channel_cb_get_iio_buffer(struct iio_cb_buffer *cb_buffer);
+
+/**
  * iio_read_channel_raw() - read from a given channel
  * @chan:		The channel being queried.
  * @val:		Value read back.
