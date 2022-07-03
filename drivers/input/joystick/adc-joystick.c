@@ -10,6 +10,7 @@
 #include <linux/module.h>
 #include <linux/platform_device.h>
 #include <linux/property.h>
+#include <linux/sort.h>
 
 #include <asm/unaligned.h>
 
@@ -25,6 +26,7 @@ struct adc_joystick {
 	struct iio_cb_buffer *buffer;
 	struct adc_joystick_axis *axes;
 	struct iio_channel *chans;
+	int *offsets;
 	int num_chans;
 	bool polled;
 };
@@ -47,35 +49,38 @@ static int adc_joystick_handle(const void *data, void *private)
 {
 	struct adc_joystick *joy = private;
 	enum iio_endian endianness;
-	int bytes, msb, val, idx, i;
-	const u16 *data_u16;
+	int bytes, msb, val, off, i;
+	const u8 *chan_data;
 	bool sign;
 
 	bytes = joy->chans[0].channel->scan_type.storagebits >> 3;
 
 	for (i = 0; i < joy->num_chans; ++i) {
-		idx = joy->chans[i].channel->scan_index;
 		endianness = joy->chans[i].channel->scan_type.endianness;
 		msb = joy->chans[i].channel->scan_type.realbits - 1;
 		sign = tolower(joy->chans[i].channel->scan_type.sign) == 's';
+		off = joy->offsets[i];
+
+		if (off < 0)
+			return -EINVAL;
+
+		chan_data = (const u8 *)data + off;
 
 		switch (bytes) {
 		case 1:
-			val = ((const u8 *)data)[idx];
+			val = *chan_data;
 			break;
 		case 2:
-			data_u16 = (const u16 *)data + idx;
-
 			/*
 			 * Data is aligned to the sample size by IIO core.
 			 * Call `get_unaligned_xe16` to hide type casting.
 			 */
 			if (endianness == IIO_BE)
-				val = get_unaligned_be16(data_u16);
+				val = get_unaligned_be16(chan_data);
 			else if (endianness == IIO_LE)
-				val = get_unaligned_le16(data_u16);
+				val = get_unaligned_le16(chan_data);
 			else /* IIO_CPU */
-				val = *data_u16;
+				val = *(const u16 *)chan_data;
 			break;
 		default:
 			return -EINVAL;
@@ -94,6 +99,70 @@ static int adc_joystick_handle(const void *data, void *private)
 	return 0;
 }
 
+static int adc_joystick_si_cmp(const void *a, const void *b, const void *priv)
+{
+	const struct iio_channel *chans = priv;
+
+	return chans[*(int *)a].channel->scan_index -
+	       chans[*(int *)b].channel->scan_index;
+}
+
+static int *adc_joystick_get_chan_offsets(struct iio_channel *chans, int count)
+{
+	struct iio_dev *indio_dev = chans[0].indio_dev;
+	struct device *dev = &indio_dev->dev;
+	const struct iio_chan_spec *ch;
+	int *offsets, *si_order;
+	int idx, i, si, length, offset = 0;
+
+	offsets = kmalloc_array(count, sizeof(int), GFP_KERNEL);
+	if (!offsets)
+		return ERR_PTR(-ENOMEM);
+
+	si_order = kmalloc_array(count, sizeof(int), GFP_KERNEL);
+	if (!si_order) {
+		kfree(offsets);
+		return ERR_PTR(-ENOMEM);
+	}
+
+	for (i = 0; i < count; ++i)
+		si_order[i] = i;
+	/* Channels in buffer are ordered by scan index. Sort to match that. */
+	sort_r(si_order, count, sizeof(int), adc_joystick_si_cmp, NULL, chans);
+
+	for (i = 0; i < count; ++i) {
+		idx = si_order[i];
+		ch = chans[idx].channel;
+		si = ch->scan_index;
+
+		if (si < 0 || !test_bit(si, indio_dev->active_scan_mask)) {
+			offsets[idx] = -1;
+			continue;
+		}
+
+		/* Channels sharing scan indices also share the samples. */
+		if (idx > 0 && si == chans[idx - 1].channel->scan_index) {
+			offsets[idx] = offsets[idx - 1];
+			continue;
+		}
+
+		offsets[idx] = offset;
+
+		length = ch->scan_type.storagebits / 8;
+		if (ch->scan_type.repeat > 1)
+			length *= ch->scan_type.repeat;
+
+		/* Account for channel alignment. */
+		if (offset % length)
+			offset += length - (offset % length);
+		offset += length;
+	}
+
+	kfree(si_order);
+
+	return offsets;
+}
+
 static int adc_joystick_open(struct input_dev *dev)
 {
 	struct adc_joystick *joy = input_get_drvdata(dev);
@@ -101,10 +170,19 @@ static int adc_joystick_open(struct input_dev *dev)
 	int ret;
 
 	ret = iio_channel_start_all_cb(joy->buffer);
-	if (ret)
+	if (ret) {
 		dev_err(devp, "Unable to start callback buffer: %d\n", ret);
+		return ret;
+	}
 
-	return ret;
+	joy->offsets = adc_joystick_get_chan_offsets(joy->chans,
+						     joy->num_chans);
+	if (IS_ERR(joy->offsets)) {
+		dev_err(devp, "Unable to allocate channel offsets\n");
+		return PTR_ERR(joy->offsets);
+	}
+
+	return 0;
 }
 
 static void adc_joystick_close(struct input_dev *dev)
@@ -112,6 +190,7 @@ static void adc_joystick_close(struct input_dev *dev)
 	struct adc_joystick *joy = input_get_drvdata(dev);
 
 	iio_channel_stop_all_cb(joy->buffer);
+	kfree(joy->offsets);
 }
 
 static void adc_joystick_cleanup(void *data)
@@ -269,7 +348,7 @@ static int adc_joystick_probe(struct platform_device *pdev)
 
 		error = devm_add_action_or_reset(dev, adc_joystick_cleanup,
 						 joy->buffer);
-		if (error)  {
+		if (error) {
 			dev_err(dev, "Unable to add action\n");
 			return error;
 		}
