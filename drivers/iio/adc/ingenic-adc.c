@@ -804,11 +804,10 @@ static irqreturn_t ingenic_adc_irq(int irq, void *data)
 	unsigned int i;
 	u32 tdat[3];
 
-	for (i = 0; i < ARRAY_SIZE(tdat); mask >>= 2, i++) {
+	memset(tdat, 0, ARRAY_SIZE(tdat));
+	for (i = 0; mask && i < ARRAY_SIZE(tdat); mask >>= 2) {
 		if (mask & 0x3)
-			tdat[i] = readl(adc->base + JZ_ADC_REG_ADTCH);
-		else
-			tdat[i] = 0;
+			tdat[i++] = readl(adc->base + JZ_ADC_REG_ADTCH);
 	}
 
 	iio_push_to_buffers(iio_dev, tdat);
