@@ -6,6 +6,7 @@
 #include <linux/ctype.h>
 #include <linux/input.h>
 #include <linux/iio/iio.h>
+#include <linux/iio/buffer.h>
 #include <linux/iio/consumer.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
@@ -46,36 +47,43 @@ static void adc_joystick_poll(struct input_dev *input)
 static int adc_joystick_handle(const void *data, void *private)
 {
 	struct adc_joystick *joy = private;
+	struct iio_buffer *buffer;
 	enum iio_endian endianness;
-	int bytes, msb, val, idx, i;
-	const u16 *data_u16;
+	int bytes, msb, val, off;
+	const u8 *chan_data;
+	unsigned int i;
 	bool sign;
 
 	bytes = joy->chans[0].channel->scan_type.storagebits >> 3;
 
 	for (i = 0; i < joy->num_chans; ++i) {
-		idx = joy->chans[i].channel->scan_index;
 		endianness = joy->chans[i].channel->scan_type.endianness;
 		msb = joy->chans[i].channel->scan_type.realbits - 1;
 		sign = tolower(joy->chans[i].channel->scan_type.sign) == 's';
+		buffer = iio_channel_cb_get_iio_buffer(joy->buffer);
+		off = iio_find_channel_offset_in_buffer(joy->chans[i].indio_dev,
+							joy->chans[i].channel,
+							buffer);
+		if (off < 0)
+			return off;
+
+		chan_data = (const u8 *)data + off;
 
 		switch (bytes) {
 		case 1:
-			val = ((const u8 *)data)[idx];
+			val = *chan_data;
 			break;
 		case 2:
-			data_u16 = (const u16 *)data + idx;
-
 			/*
 			 * Data is aligned to the sample size by IIO core.
 			 * Call `get_unaligned_xe16` to hide type casting.
 			 */
 			if (endianness == IIO_BE)
-				val = get_unaligned_be16(data_u16);
+				val = get_unaligned_be16(chan_data);
 			else if (endianness == IIO_LE)
-				val = get_unaligned_le16(data_u16);
+				val = get_unaligned_le16(chan_data);
 			else /* IIO_CPU */
-				val = *data_u16;
+				val = *(const u16 *)chan_data;
 			break;
 		default:
 			return -EINVAL;
