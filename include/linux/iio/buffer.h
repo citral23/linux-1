@@ -16,6 +16,10 @@ enum iio_buffer_direction {
 	IIO_BUFFER_DIRECTION_OUT,
 };
 
+int iio_find_channel_offset_in_buffer(struct iio_dev *indio_dev,
+				      const struct iio_chan_spec *chan,
+				      struct iio_buffer *buffer);
+
 int iio_push_to_buffers(struct iio_dev *indio_dev, const void *data);
 
 int iio_pop_from_buffer(struct iio_buffer *buffer, void *data);

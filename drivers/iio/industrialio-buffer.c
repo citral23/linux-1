@@ -694,6 +694,34 @@ static unsigned int iio_storage_bytes_for_si(struct iio_dev *indio_dev,
 	return bytes;
 }
 
+int iio_find_channel_offset_in_buffer(struct iio_dev *indio_dev,
+				      const struct iio_chan_spec *chan,
+				      struct iio_buffer *buffer)
+{
+	int length, offset = 0;
+	unsigned int si;
+
+	if (chan->scan_index < 0 ||
+	    !test_bit(chan->scan_index, buffer->scan_mask)) {
+		return -EINVAL;
+	}
+
+	for (si = 0; si < chan->scan_index; ++si) {
+		if (!test_bit(si, buffer->scan_mask))
+			continue;
+
+		length = iio_storage_bytes_for_si(indio_dev, si);
+
+		/* Account for channel alignment. */
+		if (offset % length)
+			offset += length - (offset % length);
+		offset += length;
+	}
+
+	return offset;
+}
+EXPORT_SYMBOL_GPL(iio_find_channel_offset_in_buffer);
+
 static unsigned int iio_storage_bytes_for_timestamp(struct iio_dev *indio_dev)
 {
 	struct iio_dev_opaque *iio_dev_opaque = to_iio_dev_opaque(indio_dev);
