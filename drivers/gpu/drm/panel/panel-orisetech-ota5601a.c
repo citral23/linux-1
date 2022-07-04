@@ -283,7 +283,7 @@ static int ota5601a_probe(struct spi_device *spi)
 	return 0;
 }
 
-static int ota5601a_remove(struct spi_device *spi)
+static void ota5601a_remove(struct spi_device *spi)
 {
 	struct ota5601a *panel = spi_get_drvdata(spi);
 
@@ -291,8 +291,6 @@ static int ota5601a_remove(struct spi_device *spi)
 
 	ota5601a_disable(&panel->drm_panel);
 	ota5601a_unprepare(&panel->drm_panel);
-
-	return 0;
 }
 
 static const struct drm_display_mode gpt3_display_modes[] = {
