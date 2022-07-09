@@ -38,14 +38,15 @@ properties:
     enum: [ 100000, 400000 ]
 
   dmas:
-    items:
-      - description: DMA controller phandle and request line for RX
-      - description: DMA controller phandle and request line for TX
+    minItems: 1
+    maxItems: 2
 
   dma-names:
-    items:
-      - const: rx
-      - const: tx
+    oneOf:
+      - items:
+          - const: rx
+          - const: tx
+      - const: tx-rx
 
 required:
   - compatible

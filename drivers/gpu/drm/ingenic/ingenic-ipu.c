@@ -15,6 +15,7 @@
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/of_device.h>
+#include <linux/platform_device.h>
 #include <linux/regmap.h>
 #include <linux/time.h>
 
@@ -696,10 +697,12 @@ ingenic_ipu_plane_atomic_set_property(struct drm_plane *plane,
 {
 	struct ingenic_ipu *ipu = plane_to_ingenic_ipu(plane);
 	struct drm_crtc_state *crtc_state;
+	bool mode_changed;
 
 	if (property != ipu->sharpness_prop)
 		return -EINVAL;
 
+	mode_changed = val != ipu->sharpness;
 	ipu->sharpness = val;
 
 	if (state->crtc) {
@@ -707,7 +710,7 @@ ingenic_ipu_plane_atomic_set_property(struct drm_plane *plane,
 		if (WARN_ON(!crtc_state))
 			return -EINVAL;
 
-		crtc_state->mode_changed = true;
+		crtc_state->mode_changed |= mode_changed;
 	}
 
 	return 0;
@@ -992,5 +995,8 @@ static struct platform_driver ingenic_ipu_driver = {
 	.probe = ingenic_ipu_probe,
 	.remove = ingenic_ipu_remove,
 };
+module_platform_driver(ingenic_ipu_driver);
 
-struct platform_driver *ingenic_ipu_driver_ptr = &ingenic_ipu_driver;
+MODULE_AUTHOR("Paul Cercueil <paul@crapouillou.net>");
+MODULE_DESCRIPTION("DRM driver for the IPU of Ingenic SoCs\n");
+MODULE_LICENSE("GPL v2");
