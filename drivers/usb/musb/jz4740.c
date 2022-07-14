@@ -23,6 +23,7 @@ struct jz4740_glue {
 	struct musb		*musb;
 	struct clk		*clk;
 	struct usb_role_switch	*role_sw;
+	enum musb_mode		mode;
 };
 
 static irqreturn_t jz4740_musb_interrupt(int irq, void *__hci)
@@ -30,6 +31,7 @@ static irqreturn_t jz4740_musb_interrupt(int irq, void *__hci)
 	unsigned long	flags;
 	irqreturn_t	retval = IRQ_NONE, retval_dma = IRQ_NONE;
 	struct musb	*musb = __hci;
+	struct jz4740_glue *glue = dev_get_drvdata(musb->controller->parent);
 
 	if (IS_ENABLED(CONFIG_USB_INVENTRA_DMA) && musb->dma_controller)
 		retval_dma = dma_controller_irq(irq, musb->dma_controller);
@@ -41,12 +43,13 @@ static irqreturn_t jz4740_musb_interrupt(int irq, void *__hci)
 	musb->int_rx = musb_readw(musb->mregs, MUSB_INTRRX);
 
 	/*
-	 * The controller is gadget only, the state of the host mode IRQ bits is
-	 * undefined. Mask them to make sure that the musb driver core will
-	 * never see them set
+	 * When in gadget mode, mask the host mode IRQ bits to make sure
+	 * that the musb driver core will never see them set.
 	 */
-	musb->int_usb &= MUSB_INTR_SUSPEND | MUSB_INTR_RESUME |
-			 MUSB_INTR_RESET | MUSB_INTR_SOF;
+	if (glue->mode == MUSB_PERIPHERAL) {
+		musb->int_usb &= MUSB_INTR_SUSPEND | MUSB_INTR_RESUME |
+				 MUSB_INTR_RESET | MUSB_INTR_SOF;
+	}
 
 	if (musb->int_usb || musb->int_tx || musb->int_rx)
 		retval = musb_interrupt(musb);
@@ -199,12 +202,6 @@ static const struct musb_platform_ops jz4740_musb_ops = {
 #endif
 };
 
-static const struct musb_hdrc_platform_data jz4740_musb_pdata = {
-	.mode		= MUSB_PERIPHERAL,
-	.config		= &jz4740_musb_config,
-	.platform_ops	= &jz4740_musb_ops,
-};
-
 static struct musb_fifo_cfg jz4770_musb_fifo_cfg[] = {
 	{ .hw_ep_num = 1, .style = FIFO_TX, .maxpacket = 512, },
 	{ .hw_ep_num = 1, .style = FIFO_RX, .maxpacket = 512, },
@@ -226,30 +223,28 @@ static struct musb_hdrc_config jz4770_musb_config = {
 	.fifo_cfg_size	= ARRAY_SIZE(jz4770_musb_fifo_cfg),
 };
 
-static const struct musb_hdrc_platform_data jz4770_musb_pdata = {
-	.mode		= MUSB_PERIPHERAL, /* TODO: support OTG */
-	.config		= &jz4770_musb_config,
-	.platform_ops	= &jz4740_musb_ops,
-};
-
 static int jz4740_probe(struct platform_device *pdev)
 {
 	struct device			*dev = &pdev->dev;
-	const struct musb_hdrc_platform_data *pdata;
 	struct platform_device		*musb;
 	struct jz4740_glue		*glue;
 	struct clk			*clk;
 	int				ret;
+	struct musb_hdrc_platform_data	pdata = {
+		.platform_ops = &jz4740_musb_ops,
+		.config = device_get_match_data(dev),
+	};
 
 	glue = devm_kzalloc(dev, sizeof(*glue), GFP_KERNEL);
 	if (!glue)
 		return -ENOMEM;
 
-	pdata = of_device_get_match_data(dev);
-	if (!pdata) {
-		dev_err(dev, "missing platform data\n");
-		return -EINVAL;
-	}
+	if (device_property_present(dev, "dr_mode"))
+		pdata.mode = musb_get_mode(dev);
+	else
+		pdata.mode = MUSB_PERIPHERAL;
+
+	glue->mode = pdata.mode;
 
 	musb = platform_device_alloc("musb-hdrc", PLATFORM_DEVID_AUTO);
 	if (!musb) {
@@ -287,7 +282,7 @@ static int jz4740_probe(struct platform_device *pdev)
 		goto err_clk_disable;
 	}
 
-	ret = platform_device_add_data(musb, pdata, sizeof(*pdata));
+	ret = platform_device_add_data(musb, &pdata, sizeof(pdata));
 	if (ret) {
 		dev_err(dev, "failed to add platform_data\n");
 		goto err_clk_disable;
@@ -316,9 +311,9 @@ static void jz4740_remove(struct platform_device *pdev)
 	clk_disable_unprepare(glue->clk);
 }
 
-static const struct of_device_id jz4740_musb_of_match[] = {
-	{ .compatible = "ingenic,jz4740-musb", .data = &jz4740_musb_pdata },
-	{ .compatible = "ingenic,jz4770-musb", .data = &jz4770_musb_pdata },
+static struct of_device_id jz4740_musb_of_match[] = {
+	{ .compatible = "ingenic,jz4740-musb", .data = &jz4740_musb_config },
+	{ .compatible = "ingenic,jz4770-musb", .data = &jz4770_musb_config },
 	{ /* sentinel */ },
 };
 MODULE_DEVICE_TABLE(of, jz4740_musb_of_match);
