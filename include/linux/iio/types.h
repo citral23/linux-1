@@ -34,6 +34,7 @@ enum iio_event_info {
 enum iio_available_type {
 	IIO_AVAIL_LIST,
 	IIO_AVAIL_RANGE,
+	IIO_AVAIL_LIST_WITH_TYPE,
 };
 
 enum iio_chan_info_enum {

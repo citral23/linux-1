@@ -812,6 +812,29 @@ static ssize_t iio_format_avail_range(char *buf, const int *vals, int type)
 	return iio_format_list(buf, vals, type, length, "[", "]");
 }
 
+static ssize_t iio_format_avail_list_with_type(char *buf, const int *vals,
+					       int length)
+{
+	ssize_t len = 0;
+	int i;
+
+	for (i = 0; i < length; i += 3) {
+		if (i != 0) {
+			len += sysfs_emit_at(buf, len, " ");
+			if (len >= PAGE_SIZE)
+				return -EFBIG;
+		}
+
+		len += __iio_format_value(buf, len, vals[i + 2], 2, &vals[i]);
+		if (len >= PAGE_SIZE)
+			return -EFBIG;
+	}
+
+	len += sysfs_emit_at(buf, len, "\n");
+
+	return len;
+}
+
 static ssize_t iio_read_channel_info_avail(struct device *dev,
 					   struct device_attribute *attr,
 					   char *buf)
@@ -834,6 +857,8 @@ static ssize_t iio_read_channel_info_avail(struct device *dev,
 		return iio_format_avail_list(buf, vals, type, length);
 	case IIO_AVAIL_RANGE:
 		return iio_format_avail_range(buf, vals, type);
+	case IIO_AVAIL_LIST_WITH_TYPE:
+		return iio_format_avail_list_with_type(buf, vals, length);
 	default:
 		return -EINVAL;
 	}
