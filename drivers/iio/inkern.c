@@ -888,6 +888,29 @@ static int iio_channel_read_max(struct iio_channel *chan,
 		}
 		return 0;
 
+	case IIO_AVAIL_LIST_WITH_TYPE:
+		if (length <= 0 || length % 3 != 0)
+			return -EINVAL;
+
+		if (vals[length - 1] != IIO_VAL_INT) {
+			/* FIXME: learn about max for other iio values */
+			return -EINVAL;
+		}
+
+		*val = vals[length - 3];
+		length -= 3;
+
+		for (; length; length -= 3) {
+			if (vals[length - 1] != IIO_VAL_INT) {
+				/* FIXME: learn about max for other iio values */
+				return -EINVAL;
+			}
+
+			if (vals[length - 3] > *val)
+				*val = vals[length - 3];
+		}
+		return 0;
+
 	default:
 		return ret;
 	}
