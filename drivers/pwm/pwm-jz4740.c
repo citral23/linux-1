@@ -101,11 +101,14 @@ static void jz4740_pwm_disable(struct pwm_chip *chip, struct pwm_device *pwm)
 	struct jz4740_pwm_chip *jz = to_jz4740(chip);
 
 	/*
-	 * Set duty > period. This trick allows the TCU channels in TCU2 mode to
-	 * properly return to their init level.
+	 * Set duty > period, then enable PWM mode and start the counter.
+	 * This trick allows to force the inactive pin level for the TCU2
+	 * channels.
 	 */
 	regmap_write(jz->map, TCU_REG_TDHRc(pwm->hwpwm), 0xffff);
 	regmap_write(jz->map, TCU_REG_TDFRc(pwm->hwpwm), 0x0);
+	regmap_set_bits(jz->map, TCU_REG_TCSRc(pwm->hwpwm), TCU_TCSR_PWM_EN);
+	regmap_write(jz->map, TCU_REG_TESR, BIT(pwm->hwpwm));
 
 	/*
 	 * Disable PWM output.
