@@ -55,6 +55,18 @@ static int ingenic_battery_get_property(struct power_supply *psy,
 	}
 }
 
+static inline bool scale_type_supported(int type)
+{
+	switch (type) {
+	case IIO_VAL_INT_PLUS_NANO:
+	case IIO_VAL_INT_PLUS_MICRO:
+	case IIO_VAL_FRACTIONAL_LOG2:
+		return true;
+	default:
+		return false;
+	}
+}
+
 /* Set the most appropriate IIO channel voltage reference scale
  * based on the battery's max voltage.
  */
@@ -62,7 +74,8 @@ static int ingenic_battery_set_scale(struct ingenic_battery *bat)
 {
 	const int *scale_raw;
 	int scale_len, scale_type, best_idx = -1, best_mV, max_raw, i, ret;
-	u64 max_mV;
+	unsigned int offset;
+	u64 max_mV, scale_mV;
 
 	ret = iio_read_max_channel_raw(bat->channel, &max_raw);
 	if (ret) {
@@ -77,13 +90,48 @@ static int ingenic_battery_set_scale(struct ingenic_battery *bat)
 		dev_err(bat->dev, "Unable to read channel avail scale\n");
 		return ret;
 	}
-	if (ret != IIO_AVAIL_LIST || scale_type != IIO_VAL_FRACTIONAL_LOG2)
+
+	switch (ret) {
+	case IIO_AVAIL_LIST:
+		if (!scale_type_supported(scale_type)) {
+			dev_err(bat->dev, "Unsupported scale type\n");
+			return -EINVAL;
+		}
+
+		offset = 2;
+		break;
+	case IIO_AVAIL_LIST_WITH_TYPE:
+		for (i = 0; i < scale_len; i += 3) {
+			if (!scale_type_supported(scale_raw[i + 2])) {
+				dev_err(bat->dev, "Unsupported scale type\n");
+				return -EINVAL;
+			}
+		}
+
+		offset = 3;
+		scale_type = scale_raw[2];
+		break;
+	default:
+		dev_err(bat->dev, "Unsupported scale format\n");
 		return -EINVAL;
+	}
 
 	max_mV = bat->info->voltage_max_design_uv / 1000;
 
-	for (i = 0; i < scale_len; i += 2) {
-		u64 scale_mV = (max_raw * scale_raw[i]) >> scale_raw[i + 1];
+	for (i = 0; i < scale_len; i += offset) {
+		switch (scale_type) {
+		case IIO_VAL_INT_PLUS_MICRO:
+			scale_mV = max_raw * scale_raw[i]
+				+ max_raw * scale_raw[i + 1] / 1000;
+			break;
+		case IIO_VAL_INT_PLUS_NANO:
+			scale_mV = max_raw * scale_raw[i]
+				+ max_raw * scale_raw[i + 1] / 1000000;
+			break;
+		case IIO_VAL_FRACTIONAL_LOG2:
+			scale_mV = (max_raw * scale_raw[i]) >> scale_raw[i + 1];
+			break;
+		}
 
 		if (scale_mV < max_mV)
 			continue;
@@ -101,7 +149,7 @@ static int ingenic_battery_set_scale(struct ingenic_battery *bat)
 	}
 
 	/* Only set scale if there is more than one (fractional) entry */
-	if (scale_len > 2) {
+	if (scale_len > offset) {
 		ret = iio_write_channel_attribute(bat->channel,
 						  scale_raw[best_idx],
 						  scale_raw[best_idx + 1],
