@@ -67,7 +67,7 @@
 		};
 	};
 
-	eth0_power: fixedregulator@0 {
+	eth0_power: fixedregulator-0 {
 		compatible = "regulator-fixed";
 
 		regulator-name = "eth0_power";
@@ -97,7 +97,7 @@
 		gpios = <&gpe 3 GPIO_ACTIVE_LOW>;
 	};
 
-	wlan0_power: fixedregulator@1 {
+	wlan0_power: fixedregulator-1 {
 		compatible = "regulator-fixed";
 
 		regulator-name = "wlan0_power";
@@ -106,7 +106,7 @@
 		enable-active-high;
 	};
 
-	otg_power: fixedregulator@2 {
+	otg_power: fixedregulator-2 {
 		compatible = "regulator-fixed";
 
 		regulator-name = "otg_power";
