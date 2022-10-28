@@ -533,7 +533,7 @@ static int jz4740_i2s_dev_probe(struct platform_device *pdev)
 	struct jz4740_i2s *i2s;
 	struct resource *mem;
 	void __iomem *regs;
-	int ret;
+	int ret, flags = 0;
 
 	i2s = devm_kzalloc(dev, sizeof(*i2s), GFP_KERNEL);
 	if (!i2s)
@@ -575,8 +575,10 @@ static int jz4740_i2s_dev_probe(struct platform_device *pdev)
 	if (ret)
 		return ret;
 
-	return devm_snd_dmaengine_pcm_register(dev, NULL,
-		SND_DMAENGINE_PCM_FLAG_COMPAT);
+	if (device_property_present(dev, "rx-tx"))
+		flags |= SND_DMAENGINE_PCM_FLAG_HALF_DUPLEX;
+
+	return devm_snd_dmaengine_pcm_register(dev, NULL, flags);
 }
 
 static struct platform_driver jz4740_i2s_driver = {
