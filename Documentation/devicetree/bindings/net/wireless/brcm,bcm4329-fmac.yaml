@@ -40,6 +40,7 @@ properties:
               - brcm,bcm4359-fmac
               - cypress,cyw4373-fmac
               - cypress,cyw43012-fmac
+              - ingenic,iw8103-fmac
           - const: brcm,bcm4329-fmac
       - enum:
           - brcm,bcm4329-fmac
