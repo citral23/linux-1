@@ -27,6 +27,7 @@ struct soc_info {
 struct jz4740_pwm_chip {
 	struct pwm_chip chip;
 	struct regmap *map;
+	u32 pwm_channels_mask;
 };
 
 static inline struct jz4740_pwm_chip *to_jz4740(struct pwm_chip *chip)
@@ -37,14 +38,7 @@ static inline struct jz4740_pwm_chip *to_jz4740(struct pwm_chip *chip)
 static bool jz4740_pwm_can_use_chn(struct jz4740_pwm_chip *jz,
 				   unsigned int channel)
 {
-	/* Enable all TCU channels for PWM use by default except channels 0/1 */
-	u32 pwm_channels_mask = GENMASK(jz->chip.npwm - 1, 2);
-
-	device_property_read_u32(jz->chip.dev->parent,
-				 "ingenic,pwm-channels-mask",
-				 &pwm_channels_mask);
-
-	return !!(pwm_channels_mask & BIT(channel));
+	return !!(jz->pwm_channels_mask & BIT(channel));
 }
 
 static int jz4740_pwm_request(struct pwm_chip *chip, struct pwm_device *pwm)
@@ -253,6 +247,13 @@ static int jz4740_pwm_probe(struct platform_device *pdev)
 	jz4740 = devm_kzalloc(dev, sizeof(*jz4740), GFP_KERNEL);
 	if (!jz4740)
 		return -ENOMEM;
+
+	/* Enable all TCU channels for PWM use by default except channels 0/1 */
+	jz4740->pwm_channels_mask = GENMASK(jz4740->chip.npwm - 1, 2);
+
+	device_property_read_u32(dev->parent,
+				 "ingenic,pwm-channels-mask",
+				 &jz4740->pwm_channels_mask);
 
 	jz4740->map = device_node_to_regmap(dev->parent->of_node);
 	if (IS_ERR(jz4740->map)) {
