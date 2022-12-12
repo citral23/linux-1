@@ -1,0 +1,10 @@
+// SPDX-License-Identifier: GPL-2.0
+/dts-v1/;
+
+#include "gopher2.dts"
+#include "jz4760b.dtsi"
+
+/ {
+	compatible = "qishenglong,gopher2b", "ingenic,jz4760b";
+	model = "Gopher 2B";
+};

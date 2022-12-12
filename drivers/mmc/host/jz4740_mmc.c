@@ -21,6 +21,8 @@
 #include <linux/of_device.h>
 #include <linux/pinctrl/consumer.h>
 #include <linux/platform_device.h>
+#include <linux/regulator/consumer.h>
+#include <linux/rwsem.h>
 #include <linux/scatterlist.h>
 
 #include <asm/cacheflush.h>
@@ -149,6 +151,9 @@ struct jz4740_mmc_host {
 	struct platform_device *pdev;
 	struct clk *clk;
 
+	struct rw_semaphore clk_rwsem;
+	struct notifier_block clock_nb;
+
 	enum jz4740_mmc_version version;
 
 	int irq;
@@ -157,6 +162,8 @@ struct jz4740_mmc_host {
 	struct resource *mem_res;
 	struct mmc_request *req;
 	struct mmc_command *cmd;
+
+	bool vqmmc_enabled;
 
 	unsigned long waiting;
 
@@ -373,6 +380,8 @@ static void jz4740_mmc_pre_request(struct mmc_host *mmc,
 	struct jz4740_mmc_host *host = mmc_priv(mmc);
 	struct mmc_data *data = mrq->data;
 
+	down_read(&host->clk_rwsem);
+
 	if (!host->use_dma)
 		return;
 
@@ -387,6 +396,8 @@ static void jz4740_mmc_post_request(struct mmc_host *mmc,
 {
 	struct jz4740_mmc_host *host = mmc_priv(mmc);
 	struct mmc_data *data = mrq->data;
+
+	up_read(&host->clk_rwsem);
 
 	if (data && data->host_cookie != COOKIE_UNMAPPED)
 		jz4740_mmc_dma_unmap(host, data);
@@ -935,6 +946,8 @@ static void jz4740_mmc_request(struct mmc_host *mmc, struct mmc_request *req)
 static void jz4740_mmc_set_ios(struct mmc_host *mmc, struct mmc_ios *ios)
 {
 	struct jz4740_mmc_host *host = mmc_priv(mmc);
+	int ret;
+
 	if (ios->clock)
 		jz4740_mmc_set_clock_rate(host, ios->clock);
 
@@ -947,11 +960,24 @@ static void jz4740_mmc_set_ios(struct mmc_host *mmc, struct mmc_ios *ios)
 		clk_prepare_enable(host->clk);
 		break;
 	case MMC_POWER_ON:
+		if (!IS_ERR(mmc->supply.vqmmc) && !host->vqmmc_enabled) {
+			ret = regulator_enable(mmc->supply.vqmmc);
+			if (ret)
+				dev_err(&host->pdev->dev, "Failed to set vqmmc power!\n");
+			else
+				host->vqmmc_enabled = true;
+		}
 		break;
-	default:
+	case MMC_POWER_OFF:
 		if (!IS_ERR(mmc->supply.vmmc))
 			mmc_regulator_set_ocr(mmc, mmc->supply.vmmc, 0);
+		if (!IS_ERR(mmc->supply.vqmmc) && host->vqmmc_enabled) {
+			regulator_disable(mmc->supply.vqmmc);
+			host->vqmmc_enabled = false;
+		}
 		clk_disable_unprepare(host->clk);
+		break;
+	default:
 		break;
 	}
 
@@ -978,6 +1004,23 @@ static void jz4740_mmc_enable_sdio_irq(struct mmc_host *mmc, int enable)
 	jz4740_mmc_set_irq_enabled(host, JZ_MMC_IRQ_SDIO, enable);
 }
 
+static int jz4740_voltage_switch(struct mmc_host *mmc, struct mmc_ios *ios)
+{
+	int ret;
+
+	/* vqmmc regulator is available */
+	if (!IS_ERR(mmc->supply.vqmmc)) {
+		ret = mmc_regulator_set_vqmmc(mmc, ios);
+		return ret < 0 ? ret : 0;
+	}
+
+	/* no vqmmc regulator, assume fixed regulator at 3/3.3V */
+	if (ios->signal_voltage == MMC_SIGNAL_VOLTAGE_330)
+		return 0;
+
+	return -EINVAL;
+}
+
 static const struct mmc_host_ops jz4740_mmc_ops = {
 	.request	= jz4740_mmc_request,
 	.pre_req	= jz4740_mmc_pre_request,
@@ -986,7 +1029,50 @@ static const struct mmc_host_ops jz4740_mmc_ops = {
 	.get_ro		= mmc_gpio_get_ro,
 	.get_cd		= mmc_gpio_get_cd,
 	.enable_sdio_irq = jz4740_mmc_enable_sdio_irq,
+	.start_signal_voltage_switch = jz4740_voltage_switch,
 };
+
+static inline struct jz4740_mmc_host *
+jz4740_mmc_nb_get_priv(struct notifier_block *nb)
+{
+	return container_of(nb, struct jz4740_mmc_host, clock_nb);
+}
+
+static struct clk *jz4740_mmc_get_parent_clk(struct clk *clk)
+{
+	/*
+	 * Return the first clock above the one that will effectively modify
+	 * its rate when clk_set_rate(clk) is called.
+	 */
+	clk = clk_get_first_to_set_rate(clk);
+
+	return clk_get_parent(clk);
+}
+
+static int jz4740_mmc_update_clk(struct notifier_block *nb,
+				 unsigned long action,
+				 void *data)
+{
+	struct jz4740_mmc_host *host = jz4740_mmc_nb_get_priv(nb);
+
+	/*
+	 * PLL may have changed its frequency; our clock may be running above
+	 * spec. Wait until MMC is idle (using host->clk_rwsem) before changing
+	 * the PLL clock, and after it's done, reset our clock rate.
+	 */
+
+	switch (action) {
+	case PRE_RATE_CHANGE:
+		down_write(&host->clk_rwsem);
+		break;
+	default:
+		clk_set_rate(host->clk, host->mmc->f_max);
+		up_write(&host->clk_rwsem);
+		break;
+	}
+
+	return NOTIFY_OK;
+}
 
 static const struct of_device_id jz4740_mmc_of_match[] = {
 	{ .compatible = "ingenic,jz4740-mmc", .data = (void *) JZ_MMC_JZ4740 },
@@ -1005,6 +1091,7 @@ static int jz4740_mmc_probe(struct platform_device* pdev)
 	struct mmc_host *mmc;
 	struct jz4740_mmc_host *host;
 	const struct of_device_id *match;
+	struct clk *parent_clk;
 
 	mmc = mmc_alloc_host(sizeof(struct jz4740_mmc_host), &pdev->dev);
 	if (!mmc) {
@@ -1053,6 +1140,16 @@ static int jz4740_mmc_probe(struct platform_device* pdev)
 	mmc->ops = &jz4740_mmc_ops;
 	if (!mmc->f_max)
 		mmc->f_max = JZ_MMC_CLK_RATE;
+
+	/*
+	 * There seems to be a problem with this driver on the JZ4760 and
+	 * JZ4760B SoCs. There, when using the maximum rate supported (50 MHz),
+	 * the communication fails with many SD cards.
+	 * Until this bug is sorted out, limit the maximum rate to 24 MHz.
+	 */
+	if (host->version == JZ_MMC_JZ4760 && mmc->f_max > JZ_MMC_CLK_RATE)
+		mmc->f_max = JZ_MMC_CLK_RATE;
+
 	mmc->f_min = mmc->f_max / 128;
 	mmc->ocr_avail = MMC_VDD_32_33 | MMC_VDD_33_34;
 
@@ -1091,12 +1188,23 @@ static int jz4740_mmc_probe(struct platform_device* pdev)
 		goto err_free_irq;
 	host->use_dma = !ret;
 
+	init_rwsem(&host->clk_rwsem);
+	host->clock_nb.notifier_call = jz4740_mmc_update_clk;
+
+	parent_clk = jz4740_mmc_get_parent_clk(host->clk);
+
+	ret = clk_notifier_register(parent_clk, &host->clock_nb);
+	if (ret) {
+		dev_err(&pdev->dev, "Unable to register clock notifier\n");
+		goto err_release_dma;
+	}
+
 	platform_set_drvdata(pdev, host);
 	ret = mmc_add_host(mmc);
 
 	if (ret) {
 		dev_err(&pdev->dev, "Failed to add mmc host: %d\n", ret);
-		goto err_release_dma;
+		goto err_unregister_clk_notifier;
 	}
 	dev_info(&pdev->dev, "Ingenic SD/MMC card driver registered\n");
 
@@ -1107,6 +1215,8 @@ static int jz4740_mmc_probe(struct platform_device* pdev)
 
 	return 0;
 
+err_unregister_clk_notifier:
+	clk_notifier_unregister(parent_clk, &host->clock_nb);
 err_release_dma:
 	if (host->use_dma)
 		jz4740_mmc_release_dma_channels(host);

@@ -1448,6 +1448,8 @@ patternProperties:
     description: Wobo
   "^wanchanglong,.*":
     description: Wanchanglong Electronics Technology（SHENZHEN）Co.，Ltd.
+  "^wolsen,.*":
+    description: Shenzhen Wolsen Technology Co., Ltd.
   "^x-powers,.*":
     description: X-Powers
   "^xen,.*":

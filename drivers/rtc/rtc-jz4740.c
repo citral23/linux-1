@@ -5,8 +5,11 @@
  *	 JZ4740 SoC RTC driver
  */
 
+#include <linux/bitfield.h>
 #include <linux/clk.h>
+#include <linux/clk-provider.h>
 #include <linux/io.h>
+#include <linux/iopoll.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/of_device.h>
@@ -25,6 +28,7 @@
 #define JZ_REG_RTC_WAKEUP_FILTER	0x24
 #define JZ_REG_RTC_RESET_COUNTER	0x28
 #define JZ_REG_RTC_SCRATCHPAD	0x34
+#define JZ_REG_RTC_CKPCR	0x40
 
 /* The following are present on the jz4780 */
 #define JZ_REG_RTC_WENR	0x3C
@@ -38,16 +42,22 @@
 #define JZ_RTC_CTRL_AE		BIT(2)
 #define JZ_RTC_CTRL_ENABLE	BIT(0)
 
+#define JZ_RTC_REGULATOR_NC1HZ_MASK	GENMASK(15, 0)
+#define JZ_RTC_REGULATOR_ADJC_MASK	GENMASK(25, 16)
+
 /* Magic value to enable writes on jz4780 */
 #define JZ_RTC_WENR_MAGIC	0xA55A
 
 #define JZ_RTC_WAKEUP_FILTER_MASK	0x0000FFE0
 #define JZ_RTC_RESET_COUNTER_MASK	0x00000FE0
 
+#define JZ_RTC_CKPCR_CK32PULL_DIS	BIT(4)
+#define JZ_RTC_CKPCR_CK32CTL_EN		(BIT(2) | BIT(1))
+
 enum jz4740_rtc_type {
 	ID_JZ4740,
 	ID_JZ4760,
-	ID_JZ4780,
+	ID_JZ4770,
 };
 
 struct jz4740_rtc {
@@ -55,6 +65,9 @@ struct jz4740_rtc {
 	enum jz4740_rtc_type type;
 
 	struct rtc_device *rtc;
+	struct clk *clk;
+
+	struct clk_hw clk32k;
 
 	spinlock_t lock;
 };
@@ -69,19 +82,15 @@ static inline uint32_t jz4740_rtc_reg_read(struct jz4740_rtc *rtc, size_t reg)
 static int jz4740_rtc_wait_write_ready(struct jz4740_rtc *rtc)
 {
 	uint32_t ctrl;
-	int timeout = 10000;
 
-	do {
-		ctrl = jz4740_rtc_reg_read(rtc, JZ_REG_RTC_CTRL);
-	} while (!(ctrl & JZ_RTC_CTRL_WRDY) && --timeout);
-
-	return timeout ? 0 : -EIO;
+	return readl_poll_timeout(rtc->base + JZ_REG_RTC_CTRL, ctrl,
+				  ctrl & JZ_RTC_CTRL_WRDY, 0, 1000);
 }
 
 static inline int jz4780_rtc_enable_write(struct jz4740_rtc *rtc)
 {
 	uint32_t ctrl;
-	int ret, timeout = 10000;
+	int ret;
 
 	ret = jz4740_rtc_wait_write_ready(rtc);
 	if (ret != 0)
@@ -89,11 +98,8 @@ static inline int jz4780_rtc_enable_write(struct jz4740_rtc *rtc)
 
 	writel(JZ_RTC_WENR_MAGIC, rtc->base + JZ_REG_RTC_WENR);
 
-	do {
-		ctrl = readl(rtc->base + JZ_REG_RTC_WENR);
-	} while (!(ctrl & JZ_RTC_WENR_WEN) && --timeout);
-
-	return timeout ? 0 : -EIO;
+	return readl_poll_timeout(rtc->base + JZ_REG_RTC_WENR, ctrl,
+				  ctrl & JZ_RTC_WENR_WEN, 0, 1000);
 }
 
 static inline int jz4740_rtc_reg_write(struct jz4740_rtc *rtc, size_t reg,
@@ -216,12 +222,51 @@ static int jz4740_rtc_alarm_irq_enable(struct device *dev, unsigned int enable)
 	return jz4740_rtc_ctrl_set_bits(rtc, JZ_RTC_CTRL_AF_IRQ, enable);
 }
 
+static int jz4740_rtc_read_offset(struct device *dev, long *offset)
+{
+	struct jz4740_rtc *rtc = dev_get_drvdata(dev);
+	long rate = clk_get_rate(rtc->clk);
+	s32 nc1hz, adjc, offset1k;
+	u32 reg;
+
+	reg = jz4740_rtc_reg_read(rtc, JZ_REG_RTC_REGULATOR);
+	nc1hz = FIELD_GET(JZ_RTC_REGULATOR_NC1HZ_MASK, reg);
+	adjc = FIELD_GET(JZ_RTC_REGULATOR_ADJC_MASK, reg);
+
+	offset1k = (nc1hz - rate + 1) * 1024L + adjc;
+	*offset = offset1k * 1000000L / (rate * 1024L);
+
+	return 0;
+}
+
+static int jz4740_rtc_set_offset(struct device *dev, long offset)
+{
+	struct jz4740_rtc *rtc = dev_get_drvdata(dev);
+	long rate = clk_get_rate(rtc->clk);
+	s32 offset1k, adjc, nc1hz;
+
+	offset1k = div_s64_rem(offset * rate * 1024LL, 1000000LL, &adjc);
+	nc1hz = rate - 1 + offset1k / 1024L;
+
+	if (adjc < 0) {
+		nc1hz--;
+		adjc += 1024;
+	}
+
+	nc1hz = FIELD_PREP(JZ_RTC_REGULATOR_NC1HZ_MASK, nc1hz);
+	adjc = FIELD_PREP(JZ_RTC_REGULATOR_ADJC_MASK, adjc);
+
+	return jz4740_rtc_reg_write(rtc, JZ_REG_RTC_REGULATOR, nc1hz | adjc);
+}
+
 static const struct rtc_class_ops jz4740_rtc_ops = {
 	.read_time	= jz4740_rtc_read_time,
 	.set_time	= jz4740_rtc_set_time,
 	.read_alarm	= jz4740_rtc_read_alarm,
 	.set_alarm	= jz4740_rtc_set_alarm,
 	.alarm_irq_enable = jz4740_rtc_alarm_irq_enable,
+	.read_offset	= jz4740_rtc_read_offset,
+	.set_offset	= jz4740_rtc_set_offset,
 };
 
 static irqreturn_t jz4740_rtc_irq(int irq, void *data)
@@ -260,7 +305,8 @@ static void jz4740_rtc_power_off(void)
 static const struct of_device_id jz4740_rtc_of_match[] = {
 	{ .compatible = "ingenic,jz4740-rtc", .data = (void *)ID_JZ4740 },
 	{ .compatible = "ingenic,jz4760-rtc", .data = (void *)ID_JZ4760 },
-	{ .compatible = "ingenic,jz4780-rtc", .data = (void *)ID_JZ4780 },
+	{ .compatible = "ingenic,jz4770-rtc", .data = (void *)ID_JZ4770 },
+	{ .compatible = "ingenic,jz4780-rtc", .data = (void *)ID_JZ4770 },
 	{},
 };
 MODULE_DEVICE_TABLE(of, jz4740_rtc_of_match);
@@ -301,6 +347,38 @@ static void jz4740_rtc_set_wakeup_params(struct jz4740_rtc *rtc,
 	jz4740_rtc_reg_write(rtc, JZ_REG_RTC_RESET_COUNTER, reset_ticks);
 }
 
+static int jz4740_rtc_clk32k_enable(struct clk_hw *hw)
+{
+	struct jz4740_rtc *rtc = container_of(hw, struct jz4740_rtc, clk32k);
+
+	return jz4740_rtc_reg_write(rtc, JZ_REG_RTC_CKPCR,
+				    JZ_RTC_CKPCR_CK32PULL_DIS |
+				    JZ_RTC_CKPCR_CK32CTL_EN);
+}
+
+static void jz4740_rtc_clk32k_disable(struct clk_hw *hw)
+{
+	struct jz4740_rtc *rtc = container_of(hw, struct jz4740_rtc, clk32k);
+
+	jz4740_rtc_reg_write(rtc, JZ_REG_RTC_CKPCR, 0);
+}
+
+static int jz4740_rtc_clk32k_is_enabled(struct clk_hw *hw)
+{
+	struct jz4740_rtc *rtc = container_of(hw, struct jz4740_rtc, clk32k);
+	u32 ckpcr;
+
+	ckpcr = jz4740_rtc_reg_read(rtc, JZ_REG_RTC_CKPCR);
+
+	return !!(ckpcr & JZ_RTC_CKPCR_CK32CTL_EN);
+}
+
+static const struct clk_ops jz4740_rtc_clk32k_ops = {
+	.enable = jz4740_rtc_clk32k_enable,
+	.disable = jz4740_rtc_clk32k_disable,
+	.is_enabled = jz4740_rtc_clk32k_is_enabled,
+};
+
 static int jz4740_rtc_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
@@ -330,6 +408,7 @@ static int jz4740_rtc_probe(struct platform_device *pdev)
 
 	spin_lock_init(&rtc->lock);
 
+	rtc->clk = clk;
 	platform_set_drvdata(pdev, rtc);
 
 	device_init_wakeup(dev, 1);
@@ -374,6 +453,23 @@ static int jz4740_rtc_probe(struct platform_device *pdev)
 			pm_power_off = jz4740_rtc_power_off;
 		else
 			dev_warn(dev, "Poweroff handler already present!\n");
+	}
+
+	if (rtc->type == ID_JZ4770) {
+		rtc->clk32k.init = CLK_HW_INIT_HW("clk32k", __clk_get_hw(clk),
+						  &jz4740_rtc_clk32k_ops, 0);
+
+		ret = devm_clk_hw_register(dev, &rtc->clk32k);
+		if (ret) {
+			dev_err(dev, "Unable to register clk32k clock: %d\n", ret);
+			return ret;
+		}
+
+		ret = of_clk_add_hw_provider(np, of_clk_hw_simple_get, &rtc->clk32k);
+		if (ret) {
+			dev_err(dev, "Unable to register clk32k clock provider: %d\n", ret);
+			return ret;
+		}
 	}
 
 	return 0;
