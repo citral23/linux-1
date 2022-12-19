@@ -14,6 +14,15 @@
 	compatible = "focaltech,gpt3";
 };
 
+&i2c0 {
+	compatible = "i2c-gpio";
+	sda-gpios = <&gpd 30 GPIO_ACTIVE_HIGH>;
+	scl-gpios = <&gpd 31 GPIO_ACTIVE_HIGH>;
+	i2c-gpio,delay-us = <5>; /* 100 kHz */
+
+	pinctrl-0 = <&gpios_i2c0>;
+};
+
 &btn17 {
 	status = "disabled";
 };
@@ -30,6 +39,11 @@
 	pins_power_led: power-led {
 		pin = "PB30";
 		input-enable;
+		bias-pull-up;
+	};
+
+	gpios_i2c0: gpios-i2c0 {
+		pins = "PD30", "PD31";
 		bias-pull-up;
 	};
 };
