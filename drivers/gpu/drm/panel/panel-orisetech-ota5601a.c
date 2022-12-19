@@ -5,6 +5,7 @@
  * Copyright (C) 2021, Christophe Branchereau <cbranchereau@gmail.com>
  */
 
+#include <linux/bits.h>
 #include <linux/delay.h>
 #include <linux/device.h>
 #include <linux/gpio/consumer.h>
@@ -18,6 +19,10 @@
 
 #include <drm/drm_modes.h>
 #include <drm/drm_panel.h>
+
+#define OTA5601A_CTL 0x01
+#define OTA5601A_CTL_OFF 0x00
+#define OTA5601A_CTL_ON BIT(0)
 
 struct ota5601a_panel_info {
 	const struct drm_display_mode *display_modes;
@@ -41,30 +46,30 @@ static inline struct ota5601a *to_ota5601a(struct drm_panel *panel)
 }
 
 static const struct reg_sequence ota5601a_panel_regs[] = {
-	{ 0xfd, 0x00 },
-	{ 0x02, 0x00 },
+	{ 0xfd, 0x00 }, /* Page Shift */
+	{ 0x02, 0x00 }, /* Reset */
 
-	{ 0x18, 0x00 },
-	{ 0x34, 0x20 },
+	{ 0x18, 0x00 }, /* Interface Sel: RGB 24 Bits */
+	{ 0x34, 0x20 }, /* Undocumented */
 
-	{ 0x0c, 0x01 },
-	{ 0x0d, 0x48 },
-	{ 0x0e, 0x48 },
-	{ 0x0f, 0x48 },
-	{ 0x07, 0x40 },
-	{ 0x08, 0x33 },
-	{ 0x09, 0x3a },
+	{ 0x0c, 0x01 }, /* Contrast set by CMD1 == within page 0x00 */
+	{ 0x0d, 0x48 }, /* R Brightness */
+	{ 0x0e, 0x48 }, /* G Brightness */
+	{ 0x0f, 0x48 }, /* B Brightness */
+	{ 0x07, 0x40 }, /* R Contrast */
+	{ 0x08, 0x33 }, /* G Contrast */
+	{ 0x09, 0x3a }, /* B Contrast */
 
-	{ 0x16, 0x01 },
-	{ 0x19, 0x8d },
-	{ 0x1a, 0x28 },
-	{ 0x1c, 0x00 },
+	{ 0x16, 0x01 }, /* NTSC Sel */
+	{ 0x19, 0x8d }, /* VBLK */
+	{ 0x1a, 0x28 }, /* HBLK */
+	{ 0x1c, 0x00 }, /* Scan Shift Dir. */
 
-	{ 0xfd, 0xc5 },
-	{ 0x82, 0x0c },
-	{ 0xa2, 0xb4 },
+	{ 0xfd, 0xc5 }, /* Page Shift */
+	{ 0x82, 0x0c }, /* PWR_CTRL Pump */
+	{ 0xa2, 0xb4 }, /* PWR_CTRL VGH/VGL */
 
-	{ 0xfd, 0xc4 },
+	{ 0xfd, 0xc4 }, /* Page Shift - What follows is listed as "RGB 24bit Timing Set" */
 	{ 0x82, 0x45 },
 
 	{ 0xfd, 0xc1 },
@@ -96,7 +101,7 @@ static const struct reg_sequence ota5601a_panel_regs[] = {
 	{ 0x9b, 0x38 },
 	{ 0x9c, 0x02 },
 
-	{ 0xfd, 0x00 },
+	{ 0xfd, 0x00 }, /* Page Shift */ 
 };
 
 static const struct regmap_config ota5601a_regmap_config = {
@@ -115,11 +120,11 @@ static int ota5601a_prepare(struct drm_panel *drm_panel)
 		return err;
 	}
 
-	/* Reset should be held low for 10us min according to the doc, 10ms before sending commands */
+	/* Reset to be held low for 10us min according to the doc, 10ms before sending commands */
 	gpiod_set_value_cansleep(panel->reset_gpio, 1);
 	usleep_range(10, 30);
 	gpiod_set_value_cansleep(panel->reset_gpio, 0);
-	msleep(10);
+	usleep_range(10000, 20000);
 
 	/* Init all registers. */
 	err = regmap_multi_reg_write(panel->map, ota5601a_panel_regs,
@@ -154,7 +159,7 @@ static int ota5601a_enable(struct drm_panel *drm_panel)
 	struct ota5601a *panel = to_ota5601a(drm_panel);
 	int err;
 
-	err = regmap_write(panel->map, 0x01, 0x01);
+	err = regmap_write(panel->map, OTA5601A_CTL, OTA5601A_CTL_ON);
 
 	if (err) {
 		dev_err(drm_panel->dev, "Unable to enable panel: %d\n", err);
@@ -174,7 +179,7 @@ static int ota5601a_disable(struct drm_panel *drm_panel)
 	struct ota5601a *panel = to_ota5601a(drm_panel);
 	int err;
 
-	err = regmap_write(panel->map, 0x01, 0x00);
+	err = regmap_write(panel->map, OTA5601A_CTL, OTA5601A_CTL_OFF);
 
 	if (err) {
 		dev_err(drm_panel->dev, "Unable to disable panel: %d\n", err);
