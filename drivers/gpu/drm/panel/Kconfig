@@ -391,7 +391,7 @@ config DRM_PANEL_OLIMEX_LCD_OLINUXINO
 
 config DRM_PANEL_ORISETECH_OTA5601A
         tristate "Orise Technology ota5601a RGB/SPI panel"
-        depends on OF && SPI
+        depends on SPI
         depends on BACKLIGHT_CLASS_DEVICE
         select REGMAP_SPI
         help

@@ -233,6 +233,7 @@ static const struct drm_panel_funcs ota5601a_funcs = {
 
 static int ota5601a_probe(struct spi_device *spi)
 {
+	const struct spi_device_id *id = spi_get_device_id(spi);
 	struct device *dev = &spi->dev;
 	struct ota5601a *panel;
 	int err;
@@ -243,7 +244,7 @@ static int ota5601a_probe(struct spi_device *spi)
 
 	spi_set_drvdata(spi, panel);
 
-	panel->panel_info = of_device_get_match_data(dev);
+	panel->panel_info = (const struct ota5601a_panel_info *) id->driver_data;
 	if (!panel->panel_info)
 		return -EINVAL;
 
@@ -335,8 +336,14 @@ static const struct ota5601a_panel_info gpt3_info = {
 	.bus_flags = DRM_BUS_FLAG_PIXDATA_SAMPLE_POSEDGE,
 };
 
+static const struct spi_device_id gpt3_id[] = {
+       { "gpt3", (kernel_ulong_t) &gpt3_info },
+       { /* sentinel */ }
+};
+MODULE_DEVICE_TABLE(spi, gpt3_id);
+
 static const struct of_device_id ota5601a_of_match[] = {
-	{ .compatible = "focaltech,gpt3", .data = &gpt3_info },
+	{ .compatible = "focaltech,gpt3" },
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, ota5601a_of_match);
@@ -346,6 +353,7 @@ static struct spi_driver ota5601a_driver = {
 		.name = "ota5601a",
 		.of_match_table = ota5601a_of_match,
 	},
+	.id_table = gpt3_id,
 	.probe = ota5601a_probe,
 	.remove = ota5601a_remove,
 };
