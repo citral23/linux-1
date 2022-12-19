@@ -254,6 +254,18 @@
 	vbus-supply = <&otg_vbus>;
 };
 
+&usb_otg {
+	/*
+	 * The GCW Zero's ID detect mechanism has a tendency to toast itself,
+	 * causing it to misdetect the USB mode and dumping current on the wires
+	 * when it's not supposed to, causing further damage elsewhere.
+	 * To support devices with the toasted ID detection, as well as prevent
+	 * potential hardware damage on yet unaffected devices, force USB mode
+	 * to peripheral only.
+	 */
+	dr_mode = "peripheral";
+};
+
 &pmu {
 	power-supplies = <&act8600>, <&usb_conn>, <&dc_charger>;
 };
