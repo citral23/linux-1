@@ -910,7 +910,15 @@ static int jz4760_pwm_pwm5_pins[] = { 0x85, };
 static int jz4760_pwm_pwm6_pins[] = { 0x6a, };
 static int jz4760_pwm_pwm7_pins[] = { 0x6b, };
 static int jz4760_otg_pins[] = { 0x8a, };
+static int jz4760_i2s_data_tx0_pins[] = { 0x87, };
+static int jz4760_i2s_data_tx1_pins[] = { 0x8b, };
+static int jz4760_i2s_data_tx2_pins[] = { 0x8c, };
+static int jz4760_i2s_data_tx3_pins[] = { 0x8d, };
+static int jz4760_i2s_data_rx_pins[] = { 0x86, };
+static int jz4760_i2s_clk_txrx_pins[] = { 0x6c, 0x6d, };
+static int jz4760_i2s_sysclk_pins[] = { 0x85, };
 
+static u8 jz4760_i2s_clk_txrx_funcs[] = { 1, 0, };
 static u8 jz4760_uart3_data_funcs[] = { 0, 1, };
 static u8 jz4760_mmc0_1bit_a_funcs[] = { 1, 1, 0, };
 
@@ -1023,6 +1031,14 @@ static const struct group_desc jz4760_groups[] = {
 	INGENIC_PIN_GROUP("pwm6", jz4760_pwm_pwm6, 0),
 	INGENIC_PIN_GROUP("pwm7", jz4760_pwm_pwm7, 0),
 	INGENIC_PIN_GROUP("otg-vbus", jz4760_otg, 0),
+	INGENIC_PIN_GROUP("i2s-data-tx0", jz4760_i2s_data_tx0, 0),
+	INGENIC_PIN_GROUP("i2s-data-tx1", jz4760_i2s_data_tx1, 0),
+	INGENIC_PIN_GROUP("i2s-data-tx2", jz4760_i2s_data_tx2, 0),
+	INGENIC_PIN_GROUP("i2s-data-tx3", jz4760_i2s_data_tx3, 0),
+	INGENIC_PIN_GROUP("i2s-data-rx", jz4760_i2s_data_rx, 0),
+	INGENIC_PIN_GROUP_FUNCS("i2s-clk-txrx", jz4760_i2s_clk_txrx,
+				jz4760_i2s_clk_txrx_funcs),
+	INGENIC_PIN_GROUP("i2s-sysclk", jz4760_i2s_sysclk, 2),
 };
 
 static const char *jz4760_uart0_groups[] = { "uart0-data", "uart0-hwflow", };
@@ -1083,6 +1099,10 @@ static const char *jz4760_pwm5_groups[] = { "pwm5", };
 static const char *jz4760_pwm6_groups[] = { "pwm6", };
 static const char *jz4760_pwm7_groups[] = { "pwm7", };
 static const char *jz4760_otg_groups[] = { "otg-vbus", };
+static const char *jz4760_i2s_groups[] = {
+	"i2s-data-tx0", "i2s-data-tx1", "i2s-data-tx2", "i2s-data-tx3",
+	"i2s-data-rx", "i2s-clk-txrx", "i2s-sysclk",
+};
 
 static const struct function_desc jz4760_functions[] = {
 	INGENIC_PIN_FUNCTION("uart0", jz4760_uart0),
@@ -1114,6 +1134,7 @@ static const struct function_desc jz4760_functions[] = {
 	INGENIC_PIN_FUNCTION("pwm6", jz4760_pwm6),
 	INGENIC_PIN_FUNCTION("pwm7", jz4760_pwm7),
 	INGENIC_PIN_FUNCTION("otg", jz4760_otg),
+	INGENIC_PIN_FUNCTION("i2s", jz4760_i2s),
 };
 
 static const struct ingenic_chip_info jz4760_chip_info = {
@@ -1258,6 +1279,7 @@ static int jz4770_mac_rmii_pins[] = {
 static int jz4770_mac_mii_pins[] = {
 	0x7b, 0x7a, 0x7d, 0x7c, 0xa7, 0x24, 0xaf,
 };
+static int jz4770_i2s_clk_rx_pins[] = { 0x88, 0x89, };
 
 static const struct group_desc jz4770_groups[] = {
 	INGENIC_PIN_GROUP("uart0-data", jz4770_uart0_data, 0),
@@ -1360,6 +1382,15 @@ static const struct group_desc jz4770_groups[] = {
 	INGENIC_PIN_GROUP("mac-rmii", jz4770_mac_rmii, 0),
 	INGENIC_PIN_GROUP("mac-mii", jz4770_mac_mii, 0),
 	INGENIC_PIN_GROUP("otg-vbus", jz4760_otg, 0),
+	INGENIC_PIN_GROUP("i2s-data-tx0", jz4760_i2s_data_tx0, 0),
+	INGENIC_PIN_GROUP("i2s-data-tx1", jz4760_i2s_data_tx1, 0),
+	INGENIC_PIN_GROUP("i2s-data-tx2", jz4760_i2s_data_tx2, 0),
+	INGENIC_PIN_GROUP("i2s-data-tx3", jz4760_i2s_data_tx3, 0),
+	INGENIC_PIN_GROUP("i2s-data-rx", jz4760_i2s_data_rx, 0),
+	INGENIC_PIN_GROUP_FUNCS("i2s-clk-txrx", jz4760_i2s_clk_txrx,
+				jz4760_i2s_clk_txrx_funcs),
+	INGENIC_PIN_GROUP("i2s-sysclk", jz4760_i2s_sysclk, 2),
+	INGENIC_PIN_GROUP("i2s-clk-rx", jz4770_i2s_clk_rx, 1),
 };
 
 static const char *jz4770_uart0_groups[] = { "uart0-data", "uart0-hwflow", };
@@ -1421,6 +1452,10 @@ static const char *jz4770_pwm5_groups[] = { "pwm5", };
 static const char *jz4770_pwm6_groups[] = { "pwm6", };
 static const char *jz4770_pwm7_groups[] = { "pwm7", };
 static const char *jz4770_mac_groups[] = { "mac-rmii", "mac-mii", };
+static const char *jz4770_i2s_groups[] = {
+	"i2s-data-tx0", "i2s-data-tx1", "i2s-data-tx2", "i2s-data-tx3",
+	"i2s-data-rx", "i2s-clk-txrx", "i2s-sysclk", "i2s-clk-rx",
+};
 
 static const struct function_desc jz4770_functions[] = {
 	INGENIC_PIN_FUNCTION("uart0", jz4770_uart0),
@@ -1454,6 +1489,7 @@ static const struct function_desc jz4770_functions[] = {
 	INGENIC_PIN_FUNCTION("pwm7", jz4770_pwm7),
 	INGENIC_PIN_FUNCTION("mac", jz4770_mac),
 	INGENIC_PIN_FUNCTION("otg", jz4760_otg),
+	INGENIC_PIN_FUNCTION("i2s", jz4770_i2s),
 };
 
 static const struct ingenic_chip_info jz4770_chip_info = {
@@ -1789,15 +1825,8 @@ static int jz4780_mmc0_8bit_a_pins[] = { 0x04, 0x05, 0x06, 0x07, 0x18, };
 static int jz4780_i2c3_pins[] = { 0x6a, 0x6b, };
 static int jz4780_i2c4_e_pins[] = { 0x8c, 0x8d, };
 static int jz4780_i2c4_f_pins[] = { 0xb9, 0xb8, };
-static int jz4780_i2s_data_tx_pins[] = { 0x87, };
-static int jz4780_i2s_data_rx_pins[] = { 0x86, };
-static int jz4780_i2s_clk_txrx_pins[] = { 0x6c, 0x6d, };
-static int jz4780_i2s_clk_rx_pins[] = { 0x88, 0x89, };
-static int jz4780_i2s_sysclk_pins[] = { 0x85, };
 static int jz4780_dmic_pins[] = { 0x32, 0x33, };
 static int jz4780_hdmi_ddc_pins[] = { 0xb9, 0xb8, };
-
-static u8 jz4780_i2s_clk_txrx_funcs[] = { 1, 0, };
 
 static const struct group_desc jz4780_groups[] = {
 	INGENIC_PIN_GROUP("uart0-data", jz4770_uart0_data, 0),
@@ -1887,12 +1916,12 @@ static const struct group_desc jz4780_groups[] = {
 	INGENIC_PIN_GROUP("i2c3-data", jz4780_i2c3, 1),
 	INGENIC_PIN_GROUP("i2c4-data-e", jz4780_i2c4_e, 1),
 	INGENIC_PIN_GROUP("i2c4-data-f", jz4780_i2c4_f, 1),
-	INGENIC_PIN_GROUP("i2s-data-tx", jz4780_i2s_data_tx, 0),
-	INGENIC_PIN_GROUP("i2s-data-rx", jz4780_i2s_data_rx, 0),
-	INGENIC_PIN_GROUP_FUNCS("i2s-clk-txrx", jz4780_i2s_clk_txrx,
-				jz4780_i2s_clk_txrx_funcs),
-	INGENIC_PIN_GROUP("i2s-clk-rx", jz4780_i2s_clk_rx, 1),
-	INGENIC_PIN_GROUP("i2s-sysclk", jz4780_i2s_sysclk, 2),
+	INGENIC_PIN_GROUP("i2s-data-tx", jz4760_i2s_data_tx0, 0),
+	INGENIC_PIN_GROUP("i2s-data-rx", jz4760_i2s_data_rx, 0),
+	INGENIC_PIN_GROUP_FUNCS("i2s-clk-txrx", jz4760_i2s_clk_txrx,
+				jz4760_i2s_clk_txrx_funcs),
+	INGENIC_PIN_GROUP("i2s-clk-rx", jz4770_i2s_clk_rx, 1),
+	INGENIC_PIN_GROUP("i2s-sysclk", jz4760_i2s_sysclk, 2),
 	INGENIC_PIN_GROUP("dmic", jz4780_dmic, 1),
 	INGENIC_PIN_GROUP("hdmi-ddc", jz4780_hdmi_ddc, 0),
 	INGENIC_PIN_GROUP("cim-data", jz4770_cim_8bit, 0),
