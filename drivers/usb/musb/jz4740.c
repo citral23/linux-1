@@ -315,6 +315,7 @@ static int jz4740_remove(struct platform_device *pdev)
 
 static struct of_device_id jz4740_musb_of_match[] = {
 	{ .compatible = "ingenic,jz4740-musb", .data = &jz4740_musb_config },
+	{ .compatible = "ingenic,jz4760-musb", .data = &jz4770_musb_config },
 	{ .compatible = "ingenic,jz4770-musb", .data = &jz4770_musb_config },
 	{ /* sentinel */ },
 };
