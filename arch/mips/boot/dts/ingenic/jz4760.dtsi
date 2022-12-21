@@ -461,7 +461,7 @@
 	};
 
 	usb_otg: usb@13440000 {
-		compatible = "ingenic,jz4760-musb", "ingenic,jz4740-musb";
+		compatible = "ingenic,jz4760-musb";
 		reg = <0x13440000 0x10000>;
 
 		clocks = <&cgu JZ4760_CLK_OTG>;
