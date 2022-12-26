@@ -39,6 +39,7 @@
 #define JZ_AIC_CONF_SYNC_CLK_MASTER	BIT(1)
 #define JZ_AIC_CONF_ENABLE		BIT(0)
 
+#define JZ_AIC_CTRL_CHANNELS		GENMASK(26, 24)
 #define JZ_AIC_CTRL_OUTPUT_SAMPLE_SIZE	GENMASK(21, 19)
 #define JZ_AIC_CTRL_INPUT_SAMPLE_SIZE	GENMASK(18, 16)
 #define JZ_AIC_CTRL_ENABLE_RX_DMA	BIT(15)
@@ -252,6 +253,7 @@ static int jz4740_i2s_hw_params(struct snd_pcm_substream *substream,
 	struct snd_pcm_hw_params *params, struct snd_soc_dai *dai)
 {
 	struct jz4740_i2s *i2s = snd_soc_dai_get_drvdata(dai);
+	unsigned int sample_size, channels = params_channels(params);
 	struct regmap_field *div_field;
 	unsigned long i2sdiv_max;
 	unsigned int sample_size;
@@ -282,10 +284,14 @@ static int jz4740_i2s_hw_params(struct snd_pcm_substream *substream,
 		ctrl &= ~JZ_AIC_CTRL_OUTPUT_SAMPLE_SIZE;
 		ctrl |= FIELD_PREP(JZ_AIC_CTRL_OUTPUT_SAMPLE_SIZE, sample_size);
 
-		if (params_channels(params) == 1)
+		if (dai->driver->playback.channels_max > 2) {
+			ctrl &= ~JZ_AIC_CTRL_CHANNELS;
+			ctrl |= FIELD_PREP(JZ_AIC_CTRL_CHANNELS, channels - 1);
+		} else if (channels == 1) {
 			ctrl |= JZ_AIC_CTRL_MONO_TO_STEREO;
-		else
+		} else {
 			ctrl &= ~JZ_AIC_CTRL_MONO_TO_STEREO;
+		}
 
 		div_field = i2s->field_i2sdiv_playback;
 		i2sdiv_max = GENMASK(i2s->soc_info->field_i2sdiv_playback.msb,
@@ -379,7 +385,7 @@ static struct snd_soc_dai_driver jz4770_i2s_dai = {
 	.probe = jz4740_i2s_dai_probe,
 	.playback = {
 		.channels_min = 1,
-		.channels_max = 2,
+		.channels_max = 8,
 		.rates = SNDRV_PCM_RATE_CONTINUOUS,
 		.formats = JZ4740_I2S_FMTS,
 	},
