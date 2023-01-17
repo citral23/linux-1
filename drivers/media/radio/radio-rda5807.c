@@ -395,13 +395,15 @@ static int rda5807_vidioc_s_frequency(struct file *file, void *fh,
 	if (err)
 		return err;
 
-	/* select 25 kHz channel spacing */
+	/* select 50 kHz channel spacing because 25kHz can't
+	 * cover the whole 76-108 MHz range */
 	mask |= RDA5807_CHAN_SPACE;
-	val  |= FIELD_PREP(RDA5807_CHAN_SPACE, 0x3);
+	val  |= FIELD_PREP(RDA5807_CHAN_SPACE, 0x2);
 
 	/* select frequency */
 	mask |= RDA5807_CHAN_WRCHAN;
-	val  |= FIELD_PREP(RDA5807_CHAN_WRCHAN, (a->frequency + 200) / 400);
+	val  |= FIELD_PREP(RDA5807_CHAN_WRCHAN,
+			   (a->frequency - band->rangelow + 400) / 800);
 
 	err = regmap_update_bits(radio->map, RDA5807_REG_CHAN, mask, val);
 	if (err)
