@@ -1,0 +1,10 @@
+// SPDX-License-Identifier: GPL-2.0
+/dts-v1/;
+
+#include "papk3s.dts"
+#include "jz4760b.dtsi"
+
+/ {
+	compatible = "ylm,papk3plus", "ingenic,jz4760b";
+	model = "PAP-KIII+";
+};
