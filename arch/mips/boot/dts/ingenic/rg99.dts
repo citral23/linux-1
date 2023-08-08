@@ -46,24 +46,28 @@
 			label = "D-pad up";
 			linux,code = <KEY_UP>;
 			gpios = <&gpd 8 GPIO_ACTIVE_LOW>;
+			debounce-interval = <10>;
 		};
 
 		button-1 {
 			label = "D-pad down";
 			linux,code = <KEY_DOWN>;
 			gpios = <&gpd 9 GPIO_ACTIVE_LOW>;
+			debounce-interval = <10>;
 		};
 
 		button-2 {
 			label = "D-pad left";
 			linux,code = <KEY_LEFT>;
 			gpios = <&gpd 11 GPIO_ACTIVE_LOW>;
+			debounce-interval = <10>;
 		};
 
 		button-3 {
 			label = "D-pad right";
 			linux,code = <KEY_RIGHT>;
 			gpios = <&gpc 20 GPIO_ACTIVE_LOW>;
+			debounce-interval = <10>;
 		};
 
 		button-4 {
