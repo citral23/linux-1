@@ -138,7 +138,7 @@ static const struct reg_sequence y030xx067a_init_sequence[] = {
 	{ 0x01, REG01_COM_DC(0x3c) },
 	{ 0x02, REG02_VESA_SEL(0x3) | REG02_DA_CONTRAST(0x1f) },
 	{ 0x03, REG03_VPOSITION(0x0a) },
-	{ 0x04, REG04_HPOSITION1(0xd2) },
+	{ 0x04, REG04_HPOSITION1(0x48) },
 	{ 0x05, REG05_CLIP | REG05_NVM_VREFRESH | REG05_SLBRCHARGE(0x2) },
 	{ 0x06, REG06_NT },
 	{ 0x07, 0 },
@@ -291,7 +291,7 @@ static int y030xx067a_probe(struct spi_device *spi)
 		return PTR_ERR(priv->map);
 	}
 
-	priv->panel_info = of_device_get_match_data(dev);
+	priv->panel_info = spi_get_device_match_data(spi);
 	if (!priv->panel_info)
 		return -EINVAL;
 
@@ -328,23 +328,23 @@ static void y030xx067a_remove(struct spi_device *spi)
 
 static const struct drm_display_mode y030xx067a_modes[] = {
 	{ /* 60 Hz */
-		.clock = 14400,
+		.clock = 12000,
 		.hdisplay = 320,
-		.hsync_start = 320 + 10,
-		.hsync_end = 320 + 10 + 37,
-		.htotal = 320 + 10 + 37 + 33,
+		.hsync_start = 320 + 37,
+		.hsync_end = 320 + 37 + 12,
+		.htotal = 320 + 37 + 12 + 12,
 		.vdisplay = 480,
-		.vsync_start = 480 + 84,
-		.vsync_end = 480 + 84 + 20,
-		.vtotal = 480 + 84 + 20 + 16,
+		.vsync_start = 480 + 9,
+		.vsync_end = 480 + 9 + 20,
+		.vtotal = 480 + 9 + 20 + 16,
 		.flags = DRM_MODE_FLAG_NHSYNC | DRM_MODE_FLAG_NVSYNC,
 	},
 	{ /* 50 Hz */
 		.clock = 12000,
 		.hdisplay = 320,
-		.hsync_start = 320 + 10,
-		.hsync_end = 320 + 10 + 37,
-		.htotal = 320 + 10 + 37 + 33,
+		.hsync_start = 320 + 56,
+		.hsync_end = 320 + 56 + 12,
+		.htotal = 320 + 56 + 12 + 12,
 		.vdisplay = 480,
 		.vsync_start = 480 + 84,
 		.vsync_end = 480 + 84 + 20,
@@ -362,8 +362,14 @@ static const struct y030xx067a_info y030xx067a_info = {
 	.bus_flags = DRM_BUS_FLAG_PIXDATA_SAMPLE_POSEDGE | DRM_BUS_FLAG_DE_LOW,
 };
 
+static const struct spi_device_id y030xx067a_id[] = {
+	{ "y030xx067a", (kernel_ulong_t) &y030xx067a_info },
+	{ /* sentinel */ }
+};
+MODULE_DEVICE_TABLE(spi, y030xx067a_id);
+
 static const struct of_device_id y030xx067a_of_match[] = {
-	{ .compatible = "abt,y030xx067a", .data = &y030xx067a_info },
+	{ .compatible = "abt,y030xx067a" },
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, y030xx067a_of_match);
@@ -373,6 +379,7 @@ static struct spi_driver y030xx067a_driver = {
 		.name = "abt-y030xx067a",
 		.of_match_table = y030xx067a_of_match,
 	},
+	.id_table = y030xx067a_id,
 	.probe = y030xx067a_probe,
 	.remove = y030xx067a_remove,
 };

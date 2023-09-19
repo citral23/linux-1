@@ -10,7 +10,7 @@ menu "Display Panels"
 
 config DRM_PANEL_ABT_Y030XX067A
 	tristate "ABT Y030XX067A 320x480 LCD panel"
-	depends on OF && SPI
+	depends on SPI
 	select REGMAP_SPI
 	help
 	  Say Y here to enable support for the Asia Better Technology Ltd.

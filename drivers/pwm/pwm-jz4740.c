@@ -27,6 +27,7 @@ struct soc_info {
 struct jz4740_pwm_chip {
 	struct pwm_chip chip;
 	struct regmap *map;
+	u32 pwm_channels_mask;
 };
 
 static inline struct jz4740_pwm_chip *to_jz4740(struct pwm_chip *chip)
@@ -37,14 +38,7 @@ static inline struct jz4740_pwm_chip *to_jz4740(struct pwm_chip *chip)
 static bool jz4740_pwm_can_use_chn(struct jz4740_pwm_chip *jz,
 				   unsigned int channel)
 {
-	/* Enable all TCU channels for PWM use by default except channels 0/1 */
-	u32 pwm_channels_mask = GENMASK(jz->chip.npwm - 1, 2);
-
-	device_property_read_u32(jz->chip.dev->parent,
-				 "ingenic,pwm-channels-mask",
-				 &pwm_channels_mask);
-
-	return !!(pwm_channels_mask & BIT(channel));
+	return !!(jz->pwm_channels_mask & BIT(channel));
 }
 
 static int jz4740_pwm_request(struct pwm_chip *chip, struct pwm_device *pwm)
@@ -96,16 +90,32 @@ static int jz4740_pwm_enable(struct pwm_chip *chip, struct pwm_device *pwm)
 	return 0;
 }
 
+static void jz4740_pwm_set_polarity(struct jz4740_pwm_chip *jz,
+				    unsigned int hwpwm,
+				    enum pwm_polarity polarity)
+{
+	unsigned int value = 0;
+
+	if (polarity == PWM_POLARITY_INVERSED)
+		value = TCU_TCSR_PWM_INITL_HIGH;
+
+	regmap_update_bits(jz->map, TCU_REG_TCSRc(hwpwm),
+			   TCU_TCSR_PWM_INITL_HIGH, value);
+}
+
 static void jz4740_pwm_disable(struct pwm_chip *chip, struct pwm_device *pwm)
 {
 	struct jz4740_pwm_chip *jz = to_jz4740(chip);
 
 	/*
-	 * Set duty > period. This trick allows the TCU channels in TCU2 mode to
-	 * properly return to their init level.
+	 * Set duty > period, then enable PWM mode and start the counter.
+	 * This trick allows to force the inactive pin level for the TCU2
+	 * channels.
 	 */
 	regmap_write(jz->map, TCU_REG_TDHRc(pwm->hwpwm), 0xffff);
 	regmap_write(jz->map, TCU_REG_TDFRc(pwm->hwpwm), 0x0);
+	regmap_set_bits(jz->map, TCU_REG_TCSRc(pwm->hwpwm), TCU_TCSR_PWM_EN);
+	regmap_write(jz->map, TCU_REG_TESR, BIT(pwm->hwpwm));
 
 	/*
 	 * Disable PWM output.
@@ -125,6 +135,7 @@ static int jz4740_pwm_apply(struct pwm_chip *chip, struct pwm_device *pwm,
 	unsigned long long tmp = 0xffffull * NSEC_PER_SEC;
 	struct clk *clk = pwm_get_chip_data(pwm);
 	unsigned long period, duty;
+	enum pwm_polarity polarity;
 	long rate;
 	int err;
 
@@ -164,6 +175,9 @@ static int jz4740_pwm_apply(struct pwm_chip *chip, struct pwm_device *pwm,
 	if (duty >= period)
 		duty = period - 1;
 
+	/* Restore regular polarity before disabling the channel. */
+	jz4740_pwm_set_polarity(jz4740, pwm->hwpwm, state->polarity);
+
 	jz4740_pwm_disable(chip, pwm);
 
 	err = clk_set_rate(clk, rate);
@@ -185,29 +199,30 @@ static int jz4740_pwm_apply(struct pwm_chip *chip, struct pwm_device *pwm,
 	regmap_set_bits(jz4740->map, TCU_REG_TCSRc(pwm->hwpwm),
 			TCU_TCSR_PWM_SD);
 
-	/*
-	 * Set polarity.
-	 *
-	 * The PWM starts in inactive state until the internal timer reaches the
-	 * duty value, then becomes active until the timer reaches the period
-	 * value. In theory, we should then use (period - duty) as the real duty
-	 * value, as a high duty value would otherwise result in the PWM pin
-	 * being inactive most of the time.
-	 *
-	 * Here, we don't do that, and instead invert the polarity of the PWM
-	 * when it is active. This trick makes the PWM start with its active
-	 * state instead of its inactive state.
-	 */
-	if ((state->polarity == PWM_POLARITY_NORMAL) ^ state->enabled)
-		regmap_update_bits(jz4740->map, TCU_REG_TCSRc(pwm->hwpwm),
-				   TCU_TCSR_PWM_INITL_HIGH, 0);
-	else
-		regmap_update_bits(jz4740->map, TCU_REG_TCSRc(pwm->hwpwm),
-				   TCU_TCSR_PWM_INITL_HIGH,
-				   TCU_TCSR_PWM_INITL_HIGH);
+	if (state->enabled) {
+		/*
+		 * Set polarity.
+		 *
+		 * The PWM starts in inactive state until the internal timer
+		 * reaches the duty value, then becomes active until the timer
+		 * reaches the period value. In theory, we should then use
+		 * (period - duty) as the real duty value, as a high duty value
+		 * would otherwise result in the PWM pin being inactive most of
+		 * the time.
+		 *
+		 * Here, we don't do that, and instead invert the polarity of
+		 * the PWM when it is active. This trick makes the PWM start
+		 * with its active state instead of its inactive state.
+		 */
+		if (state->polarity == PWM_POLARITY_NORMAL)
+			polarity = PWM_POLARITY_INVERSED;
+		else
+			polarity = PWM_POLARITY_NORMAL;
 
-	if (state->enabled)
+		jz4740_pwm_set_polarity(jz4740, pwm->hwpwm, polarity);
+
 		jz4740_pwm_enable(chip, pwm);
+	}
 
 	return 0;
 }
@@ -232,6 +247,13 @@ static int jz4740_pwm_probe(struct platform_device *pdev)
 	jz4740 = devm_kzalloc(dev, sizeof(*jz4740), GFP_KERNEL);
 	if (!jz4740)
 		return -ENOMEM;
+
+	/* Enable all TCU channels for PWM use by default except channels 0/1 */
+	jz4740->pwm_channels_mask = GENMASK(jz4740->chip.npwm - 1, 2);
+
+	device_property_read_u32(dev->parent,
+				 "ingenic,pwm-channels-mask",
+				 &jz4740->pwm_channels_mask);
 
 	jz4740->map = device_node_to_regmap(dev->parent->of_node);
 	if (IS_ERR(jz4740->map)) {

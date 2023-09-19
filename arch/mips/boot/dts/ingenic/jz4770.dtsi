@@ -29,7 +29,7 @@
 	};
 
 	intc: interrupt-controller@10001000 {
-		compatible = "ingenic,jz4770-intc";
+		compatible = "ingenic,jz4770-intc", "ingenic,jz4760-intc";
 		reg = <0x10001000 0x40>;
 
 		interrupt-controller;
@@ -73,7 +73,7 @@
 	};
 
 	tcu: timer@10002000 {
-		compatible = "ingenic,jz4770-tcu", "simple-mfd";
+		compatible = "ingenic,jz4770-tcu", "ingenic,jz4760-tcu", "simple-mfd";
 		reg = <0x10002000 0x1000>;
 		#address-cells = <1>;
 		#size-cells = <1>;
@@ -116,7 +116,7 @@
 		};
 
 		ost: timer@e0 {
-			compatible = "ingenic,jz4770-ost";
+			compatible = "ingenic,jz4770-ost", "ingenic,jz4760b-ost";
 			reg = <0xe0 0x20>;
 
 			clocks = <&tcu TCU_CLK_OST>;
@@ -134,7 +134,7 @@
 		interrupts = <32>;
 	};
 
-	pinctrl: pin-controller@10010000 {
+	pinctrl: pinctrl@10010000 {
 		compatible = "ingenic,jz4770-pinctrl";
 		reg = <0x10010000 0x600>;
 
@@ -268,8 +268,8 @@
 		interrupt-parent = <&intc>;
 		interrupts = <37>;
 
-		dmas = <&dmac1 27 0xffffffff>, <&dmac1 26 0xffffffff>;
-		dma-names = "rx", "tx";
+		dmas = <&dmac1 26 27 0xffffffff>;
+		dma-names = "tx-rx";
 
 		cap-sd-highspeed;
 		cap-mmc-highspeed;
@@ -288,8 +288,8 @@
 		interrupt-parent = <&intc>;
 		interrupts = <36>;
 
-		dmas = <&dmac1 31 0xffffffff>, <&dmac1 30 0xffffffff>;
-		dma-names = "rx", "tx";
+		dmas = <&dmac1 30 31 0xffffffff>;
+		dma-names = "tx-rx";
 
 		cap-sd-highspeed;
 		cap-mmc-highspeed;
@@ -308,8 +308,8 @@
 		interrupt-parent = <&intc>;
 		interrupts = <35>;
 
-		dmas = <&dmac1 37 0xffffffff>, <&dmac1 36 0xffffffff>;
-		dma-names = "rx", "tx";
+		dmas = <&dmac1 36 37 0xffffffff>;
+		dma-names = "tx-rx";
 
 		cap-sd-highspeed;
 		cap-mmc-highspeed;
@@ -319,7 +319,7 @@
 	};
 
 	uart0: serial@10030000 {
-		compatible = "ingenic,jz4770-uart";
+		compatible = "ingenic,jz4770-uart", "ingenic,jz4760-uart";
 		reg = <0x10030000 0x100>;
 
 		clocks = <&ext>, <&cgu JZ4770_CLK_UART0>;
@@ -332,7 +332,7 @@
 	};
 
 	uart1: serial@10031000 {
-		compatible = "ingenic,jz4770-uart";
+		compatible = "ingenic,jz4770-uart", "ingenic,jz4760-uart";
 		reg = <0x10031000 0x100>;
 
 		clocks = <&ext>, <&cgu JZ4770_CLK_UART1>;
@@ -345,7 +345,7 @@
 	};
 
 	uart2: serial@10032000 {
-		compatible = "ingenic,jz4770-uart";
+		compatible = "ingenic,jz4770-uart", "ingenic,jz4760-uart";
 		reg = <0x10032000 0x100>;
 
 		clocks = <&ext>, <&cgu JZ4770_CLK_UART2>;
@@ -358,7 +358,7 @@
 	};
 
 	uart3: serial@10033000 {
-		compatible = "ingenic,jz4770-uart";
+		compatible = "ingenic,jz4770-uart", "ingenic,jz4760-uart";
 		reg = <0x10033000 0x100>;
 
 		clocks = <&ext>, <&cgu JZ4770_CLK_UART3>;
@@ -366,6 +366,88 @@
 
 		interrupt-parent = <&intc>;
 		interrupts = <2>;
+
+		status = "disabled";
+	};
+
+	ssi0: spi@10043000 {
+		compatible = "ingenic,jz4770-spi", "ingenic,jz4750-spi";
+		reg = <0x10043000 0x1c>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		interrupt-parent = <&intc>;
+		interrupts = <8>;
+
+		clocks = <&cgu JZ4770_CLK_SSI0>;
+
+		dmas = <&dmac0 23 0xffffffff>, <&dmac0 22 0xffffffff>;
+		dma-names = "rx", "tx";
+
+		status = "disabled";
+	};
+
+	ssi1: spi@10044000 {
+		compatible = "ingenic,jz4770-spi", "ingenic,jz4750-spi";
+		reg = <0x10044000 0x1c>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		interrupt-parent = <&intc>;
+		interrupts = <7>;
+
+		clocks = <&cgu JZ4770_CLK_SSI1>;
+
+		dmas = <&dmac0 33 0xffffffff>, <&dmac0 32 0xffffffff>;
+		dma-names = "rx", "tx";
+
+		status = "disabled";
+	};
+
+	i2c0: i2c@10050000 {
+		compatible = "ingenic,jz4770-i2c";
+		reg = <0x10050000 0x1000>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		interrupt-parent = <&intc>;
+		interrupts = <1>;
+		clocks = <&cgu JZ4770_CLK_I2C0>;
+
+		dmas = <&dmac1 40 41 0xffffffff>;
+		dma-names = "tx-rx";
+
+		status = "disabled";
+	};
+
+	i2c1: i2c@10051000 {
+		compatible = "ingenic,jz4770-i2c";
+		reg = <0x10051000 0x1000>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		interrupt-parent = <&intc>;
+		interrupts = <0>;
+		clocks = <&cgu JZ4770_CLK_I2C1>;
+
+		dmas = <&dmac1 42 43 0xffffffff>;
+		dma-names = "tx-rx";
+
+		status = "disabled";
+	};
+
+	i2c2: i2c@10055000 {
+		compatible = "ingenic,jz4770-i2c";
+		reg = <0x10055000 0x1000>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		interrupt-parent = <&intc>;
+		interrupts = <22>;
+		clocks = <&cgu JZ4770_CLK_I2C2>;
+
+		dmas = <&dmac1 62 63 0xffffffff>;
+		dma-names = "tx-rx";
 
 		status = "disabled";
 	};
@@ -405,6 +487,63 @@
 
 		clocks = <&cgu JZ4770_CLK_LPCLK_MUX>;
 		clock-names = "lcd_pclk";
+
+		lcd_ports: ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			port@8 {
+				reg = <8>;
+
+				ipu_output: endpoint {
+					remote-endpoint = <&ipu_input>;
+				};
+			};
+		};
+	};
+
+	ipu: ipu@13080000 {
+		compatible = "ingenic,jz4770-ipu", "ingenic,jz4760-ipu";
+		reg = <0x13080000 0x800>;
+
+		interrupt-parent = <&intc>;
+		interrupts = <29>;
+
+		clocks = <&cgu JZ4770_CLK_IPU>;
+		clock-names = "ipu";
+
+		port {
+			ipu_input: endpoint {
+				remote-endpoint = <&ipu_output>;
+			};
+		};
+	};
+
+	vpu: video-decoder@132a0000 {
+		compatible = "ingenic,jz4770-vpu-rproc", "simple-mfd";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges = <0x0 0x132a0000 0x20>;
+
+		reg = <0x132a0000 0x20>, /* AUX */
+		      <0x132b0000 0x4000>, /* TCSM0 */
+		      <0x132c0000 0xc000>, /* TCSM1 */
+		      <0x132f0000 0x7000>; /* SRAM */
+		reg-names = "aux", "tcsm0", "tcsm1", "sram";
+
+		clocks = <&cgu JZ4770_CLK_AUX>, <&cgu JZ4770_CLK_VPU>;
+		clock-names = "aux", "vpu";
+
+		interrupt-parent = <&cpuintc>;
+		interrupts = <3>;
+
+		hwlock: hwlock@4 {
+			compatible = "ingenic,jz4770-vpu-hwspinlock",
+				     "ingenic,jz4755-vpu-hwspinlock";
+			reg = <0x4 0xc>;
+
+			#hwlock-cells = <0>;
+		};
 	};
 
 	dmac0: dma-controller@13420000 {
@@ -422,7 +561,7 @@
 		compatible = "ingenic,jz4770-dma";
 		reg = <0x13420100 0xC0>, <0x13420400 0x20>;
 
-		#dma-cells = <2>;
+		#dma-cells = <3>;
 
 		clocks = <&cgu JZ4770_CLK_DMA>;
 		interrupt-parent = <&intc>;
@@ -459,7 +598,20 @@
 		usb-role-switch;
 	};
 
-	rom: memory@1fc00000 {
+	bdmac: dma-controller@13450000 {
+		compatible = "ingenic,jz4770-bdma", "ingenic,jz4760b-bdma";
+		reg = <0x13450000 0xc0>, <0x13450300 0x20>;
+
+		#dma-cells = <2>;
+
+		clocks = <&cgu JZ4770_CLK_BDMA>;
+		interrupt-parent = <&intc>;
+		interrupts = <10>;
+
+		status = "disabled";
+	};
+
+	rom: rom@1fc00000 {
 		compatible = "mtd-rom";
 		probe-type = "map_rom";
 		reg = <0x1fc00000 0x2000>;

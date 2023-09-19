@@ -1,0 +1,67 @@
+// SPDX-License-Identifier: GPL-2.0
+/dts-v1/;
+
+#include "rg350m.dts"
+
+#include <dt-bindings/interrupt-controller/irq.h>
+
+/ {
+	compatible = "ylm,rg300x", "ingenic,jz4770";
+	model = "Anbernic RG-300X";
+};
+
+&panel {
+	compatible = "focaltech,gpt3";
+};
+
+&btn17 {
+	status = "disabled";
+};
+
+&btn18 {
+	status = "disabled";
+};
+
+&joystick {
+	status = "disabled";
+};
+
+&pinctrl {
+	pins_power_led: power-led {
+		pin = "PB30";
+		input-enable;
+		bias-pull-up;
+	};
+
+	gpios_i2c0: gpios-i2c0 {
+		pins = "PD30", "PD31";
+		bias-pull-up;
+	};
+};
+
+/*
+ * On the RG-300X, the LEDs are way too powerful. Work around this by setting
+ * the GPIO as input with the pull-up resitor enabled, which causes the voltage
+ * to be low enough that the LEDs are just slightly lit.
+ */
+&power_led {
+	status = "disabled";
+};
+
+&leds {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pins_power_led>;
+};
+
+/*
+ * For some reason, the IT66121 present in the RG-300X handheld does not appear
+ * if the I2C bus is handled by the i2c-jz4780 driver. Until this issue is
+ * resolved, bitbang the bus with the i2c-gpio driver.
+ */
+&i2c0 {
+	compatible = "i2c-gpio";
+	sda-gpios = <&gpd 30 GPIO_ACTIVE_HIGH>;
+	scl-gpios = <&gpd 31 GPIO_ACTIVE_HIGH>;
+
+	pinctrl-0 = <&gpios_i2c0>;
+};

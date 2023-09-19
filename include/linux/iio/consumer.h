@@ -303,7 +303,8 @@ int iio_read_max_channel_raw(struct iio_channel *chan, int *val);
  * @vals:		Available values read back.
  * @length:		Number of entries in vals.
  *
- * Returns an error code, IIO_AVAIL_RANGE or IIO_AVAIL_LIST.
+ * Returns an error code, IIO_AVAIL_RANGE, IIO_AVAIL_LIST or
+ * IIO_AVAIL_LIST_WITH_TYPE.
  *
  * For ranges, three vals are always returned; min, step and max.
  * For lists, all the possible values are enumerated.
@@ -322,7 +323,8 @@ int iio_read_avail_channel_raw(struct iio_channel *chan,
  * @length:		Number of entries in vals.
  * @attribute:		info attribute to be read back.
  *
- * Returns an error code, IIO_AVAIL_RANGE or IIO_AVAIL_LIST.
+ * Returns an error code, IIO_AVAIL_RANGE, IIO_AVAIL_LIST or
+ * IIO_AVAIL_LIST_WITH_TYPE.
  */
 int iio_read_avail_channel_attribute(struct iio_channel *chan,
 				     const int **vals, int *type, int *length,
