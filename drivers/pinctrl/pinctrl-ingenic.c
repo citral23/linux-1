@@ -148,6 +148,7 @@ struct ingenic_gpio_chip {
 	struct ingenic_pinctrl *jzpc;
 	struct gpio_chip gc;
 	unsigned int irq, reg_base;
+	u32 levels;
 };
 
 static const unsigned long enabled_socs =
@@ -3493,7 +3494,6 @@ static void ingenic_gpio_irq_ack(struct irq_data *irqd)
 	struct gpio_chip *gc = irq_data_get_irq_chip_data(irqd);
 	struct ingenic_gpio_chip *jzgc = gpiochip_get_data(gc);
 	irq_hw_number_t irq = irqd_to_hwirq(irqd);
-	bool high;
 
 	if ((irqd_get_trigger_type(irqd) == IRQ_TYPE_EDGE_BOTH) &&
 	    !is_soc_or_above(jzgc->jzpc, ID_X2000)) {
@@ -3501,11 +3501,12 @@ static void ingenic_gpio_irq_ack(struct irq_data *irqd)
 		 * Switch to an interrupt for the opposite edge to the one that
 		 * triggered the interrupt being ACKed.
 		 */
-		high = ingenic_gpio_get_value(jzgc, irq);
-		if (high)
+		if (jzgc->levels & BIT(irq))
 			irq_set_type(jzgc, irq, IRQ_TYPE_LEVEL_LOW);
 		else
 			irq_set_type(jzgc, irq, IRQ_TYPE_LEVEL_HIGH);
+
+		jzgc->levels ^= BIT(irq);
 	}
 
 	if (is_soc_or_above(jzgc->jzpc, ID_JZ4770))
@@ -3545,6 +3546,10 @@ static int ingenic_gpio_irq_set_type(struct irq_data *irqd, unsigned int type)
 		bool high = ingenic_gpio_get_value(jzgc, irq);
 
 		type = high ? IRQ_TYPE_LEVEL_LOW : IRQ_TYPE_LEVEL_HIGH;
+		if (high)
+			jzgc->levels |= BIT(irq);
+		else
+			jzgc->levels &= ~BIT(irq);
 	}
 
 	irq_set_type(jzgc, irq, type);
