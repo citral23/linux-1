@@ -32,8 +32,7 @@
 #define JZ_REG_AIC_FIFO		0x34
 
 #define JZ_AIC_CONF_OVERFLOW_PLAY_LAST	BIT(6)
-#define JZ_AIC_CONF_INTERNAL_CODEC_OFFT 5
-#define JZ_AIC_CONF_INTERNAL_CODEC	BIT(JZ_AIC_CONF_INTERNAL_CODEC_OFFT)
+#define JZ_AIC_CONF_INTERNAL_CODEC	BIT(5)
 #define JZ_AIC_CONF_I2S			BIT(4)
 #define JZ_AIC_CONF_RESET		BIT(3)
 #define JZ_AIC_CONF_BIT_CLK_MASTER	BIT(2)
@@ -395,14 +394,12 @@ static struct snd_soc_dai_driver jz4770_i2s_dai = {
 		.channels_max = 8,
 		.rates = SNDRV_PCM_RATE_CONTINUOUS,
 		.formats = JZ4740_I2S_FMTS,
-		.stream_name = "I2S Playback",
 	},
 	.capture = {
 		.channels_min = 2,
 		.channels_max = 2,
 		.rates = SNDRV_PCM_RATE_CONTINUOUS,
 		.formats = JZ4740_I2S_FMTS,
-		.stream_name = "I2S Capture",
 	},
 	.ops = &jz4740_i2s_dai_ops,
 };
@@ -479,31 +476,6 @@ static void jz4740_i2s_remove(struct snd_soc_component *component)
 	clk_disable_unprepare(i2s->clk_aic);
 }
 
-static const char * const jz4740_i2s_codec_texts[] = {
-	"External", "Internal"
-};
-static SOC_ENUM_SINGLE_DECL(jz4740_i2s_codec_enum,
-			    JZ_REG_AIC_CONF,
-			    JZ_AIC_CONF_INTERNAL_CODEC_OFFT,
-			    jz4740_i2s_codec_texts);
-static const struct snd_kcontrol_new jz4740_i2s_codec_source =
-			SOC_DAPM_ENUM("Route", jz4740_i2s_codec_enum);
-
-static const struct snd_soc_dapm_widget jz4740_i2s_dapm_widgets[] = {
-	SND_SOC_DAPM_MUX("Codec Source", SND_SOC_NOPM, 0, 0,
-			 &jz4740_i2s_codec_source),
-
-	SND_SOC_DAPM_OUTPUT("INT_CODEC"),
-	SND_SOC_DAPM_OUTPUT("EXT_CODEC"),
-};
-
-static const struct snd_soc_dapm_route jz4740_i2s_dapm_routes[] = {
-	{ "I2S Capture", NULL, "Codec Source" },
-	{ "I2S Playback", NULL, "Codec Source" },
-	{ "Codec Source", "Internal", "INT_CODEC" },
-	{ "Codec Source", "External", "EXT_CODEC" },
-};
-
 static const struct snd_soc_component_driver jz4740_i2s_component = {
 	.name			= "jz4740-i2s",
 	.probe			= jz4740_i2s_probe,
@@ -511,10 +483,6 @@ static const struct snd_soc_component_driver jz4740_i2s_component = {
 	.suspend		= jz4740_i2s_suspend,
 	.resume			= jz4740_i2s_resume,
 	.legacy_dai_naming	= 1,
-	.dapm_widgets		= jz4740_i2s_dapm_widgets,
-	.num_dapm_widgets	= ARRAY_SIZE(jz4740_i2s_dapm_widgets),
-	.dapm_routes		= jz4740_i2s_dapm_routes,
-	.num_dapm_routes	= ARRAY_SIZE(jz4740_i2s_dapm_routes),
 };
 
 static const struct of_device_id jz4740_of_matches[] = {
