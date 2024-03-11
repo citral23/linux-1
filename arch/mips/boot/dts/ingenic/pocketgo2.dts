@@ -1,0 +1,95 @@
+// SPDX-License-Identifier: GPL-2.0
+/dts-v1/;
+
+#include "bits/gcw0-base.dtsi"
+
+/ {
+	compatible = "wolsen,pocketgo2", "ingenic,jz4770";
+	model = "Wolsen PocketGo2/PlayGo";
+
+	panel {
+		compatible = "frida,frd350h54004";
+
+		reset-gpios = <&gpe 2 GPIO_ACTIVE_LOW>;
+
+		backlight = <&backlight>;
+		power-supply = <&vcc>;
+
+		port {
+			panel_input: endpoint {
+				remote-endpoint = <&panel_output>;
+			};
+		};
+	};
+};
+
+&gpio_keys {
+	btn13: button-13 {
+		label = "L2 shoulder button";
+		linux,code = <KEY_PAGEUP>;
+		linux,can-disable;
+		gpios = <&gpd 31 GPIO_ACTIVE_LOW>;
+	};
+
+	btn14: button-14 {
+		label = "R2 shoulder button";
+		linux,code = <KEY_PAGEDOWN>;
+		linux,can-disable;
+		gpios = <&gpf 10 GPIO_ACTIVE_LOW>;
+	};
+
+	btn15: button-15 {
+		label = "Volume+ button";
+		linux,code = <KEY_VOLUMEUP>;
+		linux,can-disable;
+		gpios = <&gpd 19 GPIO_ACTIVE_LOW>;
+	};
+
+	btn16: button-16 {
+		label = "Volume- button";
+		linux,code = <KEY_VOLUMEDOWN>;
+		linux,can-disable;
+		gpios = <&gpe 13 GPIO_ACTIVE_LOW>;
+	};
+
+	btn17: button-17 {
+		label = "Menu button";
+		linux,code = <KEY_HOME>;
+		linux,can-disable;
+		gpios = <&gpe 8 GPIO_ACTIVE_LOW>;
+	};
+};
+
+&js_axis0 {
+	abs-range = <3300 0>;
+};
+
+&js_axis1 {
+	abs-range = <0 3300>;
+};
+
+&lcd_ports {
+	port@0 {
+		reg = <0>;
+
+		panel_output: endpoint {
+			remote-endpoint = <&panel_input>;
+		};
+	};
+};
+
+&sound_card {
+	simple-audio-card,widgets =
+		"Speaker", "Speaker",
+		"Headphone", "Headphones";
+	simple-audio-card,routing =
+		"Headphones Amp INL", "LHPOUT",
+		"Headphones Amp INR", "RHPOUT",
+		"Headphones", "Headphones Amp OUTL",
+		"Headphones", "Headphones Amp OUTR",
+		"Speaker Amp INL", "LOUT",
+		"Speaker Amp INR", "ROUT",
+		"Speaker", "Speaker Amp OUTL",
+		"Speaker", "Speaker Amp OUTR";
+	simple-audio-card,pin-switches = "Speaker", "Headphones";
+};

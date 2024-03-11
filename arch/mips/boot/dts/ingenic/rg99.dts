@@ -1,0 +1,202 @@
+// SPDX-License-Identifier: GPL-2.0
+/dts-v1/;
+
+#include "bits/rs90-base.dtsi"
+
+/ {
+	compatible = "ylm,rg99", "ingenic,jz4725b";
+	model = "RG-99";
+
+	spi {
+		compatible = "spi-gpio";
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		sck-gpios = <&gpd 23 GPIO_ACTIVE_HIGH>;
+		mosi-gpios = <&gpd 22 GPIO_ACTIVE_HIGH>;
+		cs-gpios = <&gpd 10 GPIO_ACTIVE_HIGH>;
+		num-chipselects = <1>;
+
+		panel@0 {
+			compatible = "abt,y030xx067a";
+			reg = <0>;
+
+			spi-max-frequency = <10000000>;
+			spi-3wire;
+
+			reset-gpios = <&gpd 25 GPIO_ACTIVE_LOW>;
+
+			backlight = <&backlight>;
+			power-supply = <&vcc>;
+
+			port {
+				panel_input: endpoint {
+					remote-endpoint = <&panel_output>;
+				};
+			};
+		};
+	};
+
+	gpio-keys {
+		compatible = "gpio-keys";
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		button-0 {
+			label = "D-pad up";
+			linux,code = <KEY_UP>;
+			gpios = <&gpd 8 GPIO_ACTIVE_LOW>;
+		};
+
+		button-1 {
+			label = "D-pad down";
+			linux,code = <KEY_DOWN>;
+			gpios = <&gpd 9 GPIO_ACTIVE_LOW>;
+		};
+
+		button-2 {
+			label = "D-pad left";
+			linux,code = <KEY_LEFT>;
+			gpios = <&gpd 11 GPIO_ACTIVE_LOW>;
+		};
+
+		button-3 {
+			label = "D-pad right";
+			linux,code = <KEY_RIGHT>;
+			gpios = <&gpc 20 GPIO_ACTIVE_LOW>;
+		};
+
+		button-4 {
+			label = "Button A";
+			linux,code = <KEY_LEFTCTRL>;
+			gpios = <&gpd 24 GPIO_ACTIVE_LOW>;
+		};
+
+		button-5 {
+			label = "Button B";
+			linux,code = <KEY_LEFTALT>;
+			gpios = <&gpd 16 GPIO_ACTIVE_LOW>;
+		};
+
+		button-6 {
+			label = "Right shoulder button";
+			linux,code = <KEY_BACKSPACE>;
+			gpios = <&gpd 13 GPIO_ACTIVE_LOW>;
+			debounce-interval = <10>;
+		};
+
+		button-7 {
+			label = "Start button";
+			linux,code = <KEY_ENTER>;
+			gpios = <&gpc 31 GPIO_ACTIVE_LOW>;
+		};
+
+		button-8 {
+			label = "Left shoulder button";
+			linux,code = <KEY_TAB>;
+			gpios = <&gpd 14 GPIO_ACTIVE_LOW>;
+			debounce-interval = <10>;
+		};
+
+		button-9 {
+			label = "Button X";
+			linux,code = <KEY_SPACE>;
+			gpios = <&gpd 17 GPIO_ACTIVE_LOW>;
+		};
+
+		button-10 {
+			label = "Button Y";
+			linux,code = <KEY_LEFTSHIFT>;
+			gpios = <&gpd 15 GPIO_ACTIVE_LOW>;
+		};
+
+		button-11 {
+			label = "Select button";
+			linux,code = <KEY_ESC>;
+			gpios = <&gpc 30 GPIO_ACTIVE_LOW>;
+		};
+
+		button-12 {
+			label = "Menu1 button";
+			linux,code = <KEY_PAGEUP>;
+			gpios = <&gpd 12 GPIO_ACTIVE_LOW>;
+			debounce-interval = <10>;
+		};
+
+		button-13 {
+			label = "Menu2 button";
+			linux,code = <KEY_PAGEDOWN>;
+			gpios = <&gpb 31 GPIO_ACTIVE_LOW>;
+			debounce-interval = <10>;
+		};
+	};
+
+	usb_conn: connector {
+		compatible = "gpio-usb-b-connector", "usb-b-connector";
+		label = "mini-USB";
+		type = "mini";
+
+		vbus-gpios = <&gpc 10 GPIO_ACTIVE_HIGH>;
+		vbus-supply = <&vcc>;
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&pins_vbus>;
+
+		port {
+			usb_conn_ep: endpoint {
+				remote-endpoint = <&usb_ep>;
+			};
+		};
+	};
+};
+
+&udc {
+	port {
+		usb_ep: endpoint {
+			remote-endpoint = <&usb_conn_ep>;
+		};
+	};
+};
+
+&sound_card {
+	/* TODO: What's the headphones detection GPIO? */
+	simple-audio-card,hp-det-gpio;
+};
+
+&pmu {
+	power-supplies = <&usb_conn>;
+};
+
+&pinctrl {
+	pins_vbus: vbus {
+		pins = "PC10";
+		bias-disable;
+	};
+};
+
+&pins_lcd {
+	groups = "lcd-8bit";
+};
+
+&pins_mmc1_cd {
+	pins = "PD21";
+};
+
+&mmc1 {
+	cd-gpios = <&gpd 21 GPIO_ACTIVE_LOW>;
+};
+
+&vmem {
+	/* Reserve 2 MiB of VRAM */
+	reg = <0x1e00000 0x200000>;
+};
+
+&battery {
+	voltage-min-design-microvolt = <3900000>;
+	voltage-max-design-microvolt = <4200000>;
+};
+
+&resistor {
+	output-ohms = <28000>;
+	full-ohms = <100000>;
+};
