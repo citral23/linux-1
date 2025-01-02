@@ -797,20 +797,25 @@ int iio_read_avail_channel_raw(struct iio_channel *chan,
 EXPORT_SYMBOL_GPL(iio_read_avail_channel_raw);
 
 static int iio_channel_read_max(struct iio_channel *chan,
-				int *val, int *val2, int *type,
+				int *val, int *val2,
 				enum iio_chan_info_enum info)
 {
 	const int *vals;
+	int unused;
 	int length;
 	int ret;
+	int type;
 
-	ret = iio_channel_read_avail(chan, &vals, type, &length, info);
+	if (!val2)
+		val2 = &unused;
+
+	ret = iio_channel_read_avail(chan, &vals, &type, &length, info);
 	if (ret < 0)
 		return ret;
 
 	switch (ret) {
 	case IIO_AVAIL_RANGE:
-		switch (*type) {
+		switch (type) {
 		case IIO_VAL_INT:
 			*val = vals[2];
 			break;
@@ -824,13 +829,36 @@ static int iio_channel_read_max(struct iio_channel *chan,
 	case IIO_AVAIL_LIST:
 		if (length <= 0)
 			return -EINVAL;
-		switch (*type) {
+		switch (type) {
 		case IIO_VAL_INT:
 			*val = max_array(vals, length);
 			break;
 		default:
 			/* TODO: learn about max for other iio values */
 			return -EINVAL;
+		}
+		return 0;
+
+	case IIO_AVAIL_LIST_WITH_TYPE:
+		if (length <= 0 || length % 3 != 0)
+			return -EINVAL;
+
+		if (vals[length - 1] != IIO_VAL_INT) {
+			/* FIXME: learn about max for other iio values */
+			return -EINVAL;
+		}
+
+		*val = vals[length - 3];
+		length -= 3;
+
+		for (; length; length -= 3) {
+			if (vals[length - 1] != IIO_VAL_INT) {
+				/* FIXME: learn about max for other iio values */
+				return -EINVAL;
+			}
+
+			if (vals[length - 3] > *val)
+				*val = vals[length - 3];
 		}
 		return 0;
 
@@ -842,13 +870,12 @@ static int iio_channel_read_max(struct iio_channel *chan,
 int iio_read_max_channel_raw(struct iio_channel *chan, int *val)
 {
 	struct iio_dev_opaque *iio_dev_opaque = to_iio_dev_opaque(chan->indio_dev);
-	int type;
 
 	guard(mutex)(&iio_dev_opaque->info_exist_lock);
 	if (!chan->indio_dev->info)
 		return -ENODEV;
 
-	return iio_channel_read_max(chan, val, NULL, &type, IIO_CHAN_INFO_RAW);
+	return iio_channel_read_max(chan, val, NULL, IIO_CHAN_INFO_RAW);
 }
 EXPORT_SYMBOL_GPL(iio_read_max_channel_raw);
 

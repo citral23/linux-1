@@ -1,0 +1,45 @@
+// SPDX-License-Identifier: GPL-2.0
+/dts-v1/;
+
+#include "rg280m-v1.0.dts"
+
+/ {
+	compatible = "ylm,rg350m", "ingenic,jz4770";
+	model = "Anbernic RG-350M";
+};
+
+&panel {
+	compatible = "leadtek,ltk035c5444t";
+};
+
+&gpio_keys {
+	btn18: button-18 {
+		label = "R3 joystick button";
+		linux,code = <KEY_KPDOT>;
+		linux,can-disable;
+		gpios = <&gpb 15 GPIO_ACTIVE_LOW>;
+	};
+};
+
+&joystick {
+	io-channels = <&adc INGENIC_ADC_TOUCH_YP>,
+		      <&adc INGENIC_ADC_TOUCH_XP>,
+		      <&adc INGENIC_ADC_TOUCH_YN>,
+		      <&adc INGENIC_ADC_TOUCH_XN>;
+
+	js_axis2: axis@2 {
+		reg = <2>;
+		linux,code = <ABS_RX>;
+		abs-range = <200 3000>;
+		abs-fuzz = <4>;
+		abs-flat = <200>;
+	};
+
+	js_axis3: axis@3 {
+		reg = <3>;
+		linux,code = <ABS_RY>;
+		abs-range = <200 3000>;
+		abs-fuzz = <4>;
+		abs-flat = <200>;
+	};
+};

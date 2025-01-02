@@ -1665,6 +1665,8 @@ patternProperties:
     description: Wobo
   "^wolfvision,.*":
     description: WolfVision GmbH
+  "^wolsen,.*":
+    description: Shenzhen Wolsen Technology Co., Ltd.
   "^x-powers,.*":
     description: X-Powers
   "^xen,.*":

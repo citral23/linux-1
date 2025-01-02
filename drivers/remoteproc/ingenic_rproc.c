@@ -183,7 +183,20 @@ static int ingenic_rproc_probe(struct platform_device *pdev)
 	vpu->dev = &pdev->dev;
 	platform_set_drvdata(pdev, vpu);
 
-	vpu->aux_base = devm_platform_ioremap_resource_byname(pdev, "aux");
+	mem = platform_get_resource_byname(pdev, IORESOURCE_MEM, "aux");
+
+	/*
+	 * Request only the registers we use.
+	 * Regs 0x4->0xc will be used in a hwspinlock driver.
+	 */
+	if (!devm_request_mem_region(dev, mem->start, 0x4, dev_name(dev)) ||
+	    !devm_request_mem_region(dev, mem->start + REG_AUX_MSG_ACK,
+				     0x10, dev_name(dev))) {
+		dev_err(dev, "unable to request I/O memory region\n");
+		return -EBUSY;
+	}
+
+	vpu->aux_base = devm_ioremap(dev, mem->start, resource_size(mem));
 	if (IS_ERR(vpu->aux_base)) {
 		dev_err(dev, "Failed to ioremap\n");
 		return PTR_ERR(vpu->aux_base);
